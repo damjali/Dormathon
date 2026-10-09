@@ -16,7 +16,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { LayoutBottomIcon, Mail01Icon } from "@hugeicons/core-free-icons"
+import { LayoutBottomIcon, Mail01Icon, Video01Icon } from "@hugeicons/core-free-icons"
 
 // Real app features live here, separate from the (placeholder) docs nav below.
 const workspace = {
@@ -25,6 +25,11 @@ const workspace = {
       title: "Emails",
       url: "/dashboard/emails",
       icon: Mail01Icon,
+    },
+    {
+      title: "TikTok Live",
+      url: "/dashboard/tiktok",
+      icon: Video01Icon,
     },
   ],
 }
