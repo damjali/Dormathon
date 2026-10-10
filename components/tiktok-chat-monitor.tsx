@@ -29,7 +29,8 @@ const MAX_MESSAGES = 500
 
 // Shared sizing for the three side-by-side panels: fills the row in the xl
 // 3-column layout, falls back to a sane min-height when stacked.
-const PANEL_CLASS = "flex min-h-[420px] flex-col rounded-2xl shadow-sm xl:h-full xl:min-h-0"
+const PANEL_CLASS =
+  "flex min-h-[420px] flex-col rounded-xl shadow-sm ring-1 ring-[#25c9c4]/15 transition-[box-shadow,ring-color,transform] duration-200 hover:-translate-y-0.5 hover:ring-[#fe2c55]/35 hover:shadow-[0_14px_30px_-16px_rgba(254,44,85,0.48)] focus-within:ring-2 focus-within:ring-[#25c9c4]/30 xl:h-full xl:min-h-0"
 
 export function TikTokChatMonitor() {
   const [input, setInput] = React.useState("")
@@ -134,20 +135,29 @@ export function TikTokChatMonitor() {
   const streaming = phase.kind === "live" || phase.kind === "connecting"
 
   return (
-    <div className="flex flex-1 flex-col gap-5 bg-background p-4 sm:p-5 lg:gap-6 lg:px-7 lg:py-6 xl:h-[calc(100svh-3.5rem)] xl:min-h-[680px] xl:flex-none">
-      <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-5 rounded-[28px] border border-[#e5e5e8] bg-white px-5 py-6 shadow-sm sm:px-7 sm:py-7">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-2xl">
-            <Badge variant="secondary" className="mb-3 gap-2 rounded-full border border-[#fe2c55]/15 bg-[#fe2c55]/[0.06] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#c91f45]">
-              <span className={`size-1.5 rounded-full ${phase.kind === "live" ? "animate-pulse bg-[#fe2c55]" : "bg-[#70717b]/60"}`} />
-              Live commerce workspace
-            </Badge>
-            <h1 className="text-3xl font-bold tracking-tight text-[#161823] sm:text-4xl">TikTok Live</h1>
-            <p className="mt-1.5 max-w-xl text-sm leading-6 text-[#686a75]">
-              Follow the conversation, get help from LiveBuddy, and keep product details close at hand.
-            </p>
+    <div className="flex flex-1 flex-col gap-3 bg-background p-4 sm:p-5 lg:gap-4 lg:px-7 lg:py-4 xl:h-[100svh] xl:min-h-[736px] xl:flex-none">
+      <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-3 rounded-xl border border-white/70 bg-gradient-to-br from-white via-white to-[#fff3f6] px-5 py-4 shadow-[0_12px_35px_-22px_rgba(254,44,85,0.4)] transition-shadow duration-200 hover:shadow-[0_16px_40px_-20px_rgba(37,244,238,0.38)] sm:px-6 sm:py-4">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#161823] text-white shadow-[3px_3px_0_#25f4ee,-3px_-3px_0_#fe2c55]">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-6">
+                <path d="M14 3v11.2a4.2 4.2 0 1 1-3.3-4.1V7.2c-1.2-.2-2.2-.7-3.1-1.5v4.4A7.2 7.2 0 1 0 17 17.2V9.4c1.2.8 2.6 1.2 4 1.2V7.2c-3.9 0-7-1.8-7-4.2Z" fill="currentColor" />
+              </svg>
+            </span>
+            <div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h1 className="text-3xl font-black leading-none tracking-[-0.055em] text-[#161823] sm:text-4xl">
+                  TikTok <span className="text-[#fe2c55]">Live</span>
+                </h1>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#161823] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#25f4ee]">
+                  <span className="size-1.5 animate-pulse rounded-full bg-[#fe2c55]" />
+                  Live studio
+                </span>
+              </div>
+              <p className="mt-1 text-xs font-medium text-[#686a75] sm:text-[13px]">Go live. Catch every comment. Reply with LiveBuddy.</p>
+            </div>
           </div>
-          <form onSubmit={onSubmit} className="flex w-full items-center gap-2 rounded-full border border-[#e5e5e8] bg-[#f5f5f6] p-2 shadow-sm sm:max-w-xl xl:max-w-lg">
+          <form onSubmit={onSubmit} className="flex w-full items-center gap-2 rounded-full border border-[#e5e5e8] bg-white p-1.5 shadow-[0_4px_18px_-12px_rgba(22,24,35,0.35)] transition-shadow focus-within:border-[#25c9c4]/50 focus-within:shadow-[0_0_0_4px_rgba(37,244,238,0.12)] sm:max-w-xl xl:max-w-lg">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -155,9 +165,9 @@ export function TikTokChatMonitor() {
               autoComplete="off"
               spellCheck={false}
               aria-label="TikTok username"
-              className="h-10 rounded-full border-transparent bg-white shadow-none focus-visible:bg-white"
+              className="h-10 rounded-full border-transparent bg-[#f7f7f8] text-sm shadow-none focus-visible:bg-white"
             />
-            <Button type="submit" disabled={busy || !input.trim()} className="h-10 rounded-full bg-[#fe2c55] px-5 text-white shadow-sm hover:bg-[#e6254c]">
+            <Button type="submit" disabled={busy || !input.trim()} className="h-10 rounded-full bg-[#fe2c55] px-5 font-bold text-white shadow-[0_4px_12px_-4px_rgba(254,44,85,0.7)] transition-[background-color,transform,box-shadow] duration-150 hover:-translate-y-0.5 hover:bg-[#e6254c] hover:shadow-[0_8px_16px_-5px_rgba(254,44,85,0.65)] active:translate-y-0">
               {phase.kind === "checking" ? "Checking…" : phase.kind === "connecting" ? "Connecting…" : "Connect"}
             </Button>
             {streaming && (
@@ -175,33 +185,33 @@ export function TikTokChatMonitor() {
 
       <div className="mx-auto grid w-full max-w-[1800px] items-stretch gap-4 lg:grid-cols-2 xl:min-h-0 xl:flex-1 xl:grid-cols-3 xl:grid-rows-[minmax(0,1fr)]">
         <Card className={PANEL_CLASS}>
-          <CardHeader className="flex h-[124px] min-h-[124px] shrink-0 flex-col justify-center gap-2 border-b border-[#fe2c55]/10 bg-[#fff6f7] px-5 py-4">
-            <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#fe2c55] text-white shadow-sm shadow-[#fe2c55]/20">
+          <CardHeader className="flex h-[92px] min-h-[92px] shrink-0 flex-col items-stretch justify-center gap-2 rounded-t-xl border-b border-[#fe2c55]/20 bg-gradient-to-r from-[#ffe8ed] via-[#fff4f6] to-[#fffafa] px-4 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#fe2c55] text-white shadow-[3px_3px_0_#25f4ee] transition-transform duration-200 group-hover/card:rotate-[-3deg]">
                 <ChatBubbleIcon />
               </div>
-              <div className="min-w-0">
-                <CardTitle className="text-base font-semibold">Live chat</CardTitle>
-                <CardDescription className="mt-1 line-clamp-2 min-h-8 text-xs leading-4">Choose a comment to send it to LiveBuddy.</CardDescription>
+              <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base font-bold tracking-tight">Live chat</CardTitle>
+                  <CardDescription className="mt-0.5 truncate text-xs leading-4">Choose a comment to send it to LiveBuddy.</CardDescription>
               </div>
-              <Badge variant="outline" className="ml-auto shrink-0 rounded-full border-[#d8d8dc] bg-white text-[10px] text-[#161823]">
+                <Badge variant="outline" className="shrink-0 rounded-full border-[#fe2c55]/30 bg-white px-3 text-xs font-semibold text-[#161823] shadow-sm">
                 {messages.length} {messages.length === 1 ? "message" : "messages"}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col pt-1">
+          <CardContent className="flex min-h-0 flex-1 flex-col pt-2">
             <div
               ref={scrollRef}
               onScroll={(e) => {
                 const el = e.currentTarget
                 stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
               }}
-              className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto rounded-xl bg-[#f5f5f6] p-3 pr-2 sm:p-4"
+              className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto rounded-xl border border-[#e5e5e8] bg-gradient-to-br from-[#f7f7f8] to-[#effbfb] p-4 pr-2 shadow-inner sm:p-5"
             >
               {phase.kind === "live" && (
-                <Marker variant="separator" role="status">
-                  <MarkerContent>
-                    Connected to <span className="font-medium text-foreground">@{phase.username}</span>
+                <Marker variant="separator" role="status" className="text-[#30313a]">
+                  <MarkerContent className="font-medium text-[#30313a]">
+                    Connected to <span className="font-semibold text-[#161823]">@{phase.username}</span>
                   </MarkerContent>
                 </Marker>
               )}
@@ -279,16 +289,18 @@ function ChatGroup({
       </MessageAvatar>
       <MessageContent className="gap-1">
         <MessageHeader className="gap-1">
-          <span className="text-foreground">{author.nickname}</span>
-          {author.uniqueId && <span className="font-normal">@{author.uniqueId}</span>}
+          <span className="font-semibold text-[#161823]">{author.nickname}</span>
+          {author.uniqueId && <span className="font-normal text-[#555865]">@{author.uniqueId}</span>}
         </MessageHeader>
         <BubbleGroup>
           {group.map((m) => {
             const isAsked = asked.has(m.id)
             return (
               <div key={m.id} className="group/comment flex w-full min-w-0 items-center gap-1">
-                <Bubble variant={isAsked ? "tinted" : "muted"} className="max-w-[calc(100%-2.5rem)]">
-                  <BubbleContent className="rounded-2xl shadow-sm">{m.comment}</BubbleContent>
+                <Bubble variant="muted" className="max-w-[calc(100%-2.5rem)]">
+                  <BubbleContent className={`rounded-2xl border text-[15px] leading-6 shadow-sm transition-[box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:shadow-md ${isAsked ? "!border-[#fe2c55]/25 !bg-[#fff0f3] !text-[#161823]" : "!border-[#25c9c4]/35 !bg-[#e9fbfa] !text-[#161823]"}`}>
+                    {m.comment}
+                  </BubbleContent>
                 </Bubble>
                 <Button
                   variant="ghost"
@@ -297,7 +309,7 @@ function ChatGroup({
                   onClick={() => onPush(m)}
                   aria-label={isAsked ? "Sent to LiveBuddy" : "Send to LiveBuddy"}
                   title={isAsked ? "Sent to LiveBuddy" : "Send to LiveBuddy"}
-                  className="shrink-0 rounded-xl text-muted-foreground transition-colors group-hover/comment:bg-background group-hover/comment:text-foreground"
+                  className="shrink-0 rounded-xl text-muted-foreground transition-[color,background-color,transform] duration-150 group-hover/comment:scale-105 group-hover/comment:bg-[#25f4ee]/20 group-hover/comment:text-[#161823] active:scale-95"
                 >
                   <HugeiconsIcon icon={isAsked ? CheckmarkCircle02Icon : SentIcon} strokeWidth={2} />
                 </Button>
@@ -365,7 +377,7 @@ function StatusLine({ phase, viewers }: { phase: Phase; viewers: number | null }
 
 function ViewerIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-4">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-5">
       <path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20m6-9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm6-6.5a3.5 3.5 0 0 1 0 6.8m1 3.2h.5a3.5 3.5 0 0 1 3.5 3.5V20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )

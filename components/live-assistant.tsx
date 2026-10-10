@@ -164,24 +164,24 @@ export function LiveAssistantPanel({
 
   return (
     <Card className={className}>
-      <CardHeader className="flex h-[124px] min-h-[124px] shrink-0 flex-col justify-center gap-2 border-b border-[#25c9c4]/20 bg-[#effcfb] px-5 py-4">
-        <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#161823] text-white shadow-[2px_2px_0_#25f4ee,-2px_-2px_0_#fe2c55]">
+      <CardHeader className="flex h-[92px] min-h-[92px] shrink-0 flex-col items-stretch justify-center gap-2 rounded-t-xl border-b border-[#25c9c4]/30 bg-gradient-to-r from-[#dffaf9] via-[#effdfc] to-[#fff7f9] px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#161823] text-white shadow-[3px_3px_0_#25f4ee,-3px_-3px_0_#fe2c55] transition-transform duration-200 group-hover/card:rotate-[3deg]">
             <HugeiconsIcon icon={AiChat02Icon} strokeWidth={2} className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
-              <CardTitle className="shrink-0 text-base font-semibold">LiveBuddy AI</CardTitle>
-              <span className="rounded-full border border-[#25c9c4]/30 bg-white px-2.5 py-1 text-[10px] font-medium text-[#146d6a]">
+              <CardTitle className="shrink-0 text-base font-bold tracking-tight">LiveBuddy AI</CardTitle>
+              <span className="truncate rounded-full border border-[#25c9c4]/40 bg-white px-2.5 py-0.5 text-[10px] font-semibold text-[#146d6a] shadow-sm">
                 Reply assistant
               </span>
               {exchanges.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={onClear} className="ml-auto h-8 shrink-0 px-2">
+                <Button variant="ghost" size="sm" onClick={onClear} className="ml-auto h-8 shrink-0 rounded-lg px-2 transition-colors hover:bg-[#fe2c55]/10 hover:text-[#c51f42]">
                   Clear
                 </Button>
               )}
             </div>
-            <CardDescription className="mt-1 line-clamp-2 min-h-8 text-xs leading-4">
+            <CardDescription className="mt-0.5 truncate text-xs leading-4">
               Answers to the comments you sent, ready to read out on stream.
             </CardDescription>
           </div>
