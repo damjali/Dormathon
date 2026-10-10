@@ -7,6 +7,7 @@ export type WorkBuddyAttachment = {
 export type AskWorkBuddyParams = {
   text: string
   attachments?: WorkBuddyAttachment[]
+  workspaceDirs?: string[]
 }
 
 export type AskWorkBuddyResult = {
