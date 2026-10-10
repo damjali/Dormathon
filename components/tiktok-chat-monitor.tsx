@@ -26,7 +26,13 @@ type Phase =
 
 const MAX_MESSAGES = 500
 
-export function TikTokChatMonitor() {
+type AnswerState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "done"; answer: string }
+  | { kind: "error"; message: string }
+
+export function TikTokChatMonitor({ selectedFileIds = [] }: { selectedFileIds?: string[] }) {
   const [input, setInput] = React.useState("")
   const [phase, setPhase] = React.useState<Phase>({ kind: "idle" })
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
@@ -129,7 +135,7 @@ export function TikTokChatMonitor() {
   const streaming = phase.kind === "live" || phase.kind === "connecting"
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+    <div className="flex flex-1 flex-col gap-4">
       <form onSubmit={onSubmit} className="flex max-w-xl gap-2">
         <Input
           value={input}
