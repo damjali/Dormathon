@@ -4,6 +4,7 @@ import {
   MAX_REFERENCE_FILE_BYTES,
   REFERENCE_FILES_BUCKET,
   REFERENCE_FILES_TABLE,
+  referenceFileKind,
   type ReferenceFile,
 } from "@/lib/tiktok/reference-files"
 
@@ -37,6 +38,9 @@ export async function POST(request: Request) {
   const file = form.get("file")
   if (!(file instanceof File)) {
     return Response.json({ error: "Missing file" }, { status: 400 })
+  }
+  if (!referenceFileKind(file.name)) {
+    return Response.json({ error: "Only text (.txt, .md), PDF and Word (.docx) files are supported" }, { status: 400 })
   }
   if (file.size === 0) {
     return Response.json({ error: "File is empty" }, { status: 400 })

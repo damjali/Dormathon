@@ -26,7 +26,7 @@ export type Exchange = {
 
 const PRODUCTS_KEY = "livebuddy:products"
 
-export function useLiveAssistant() {
+export function useLiveAssistant(fileIds: string[]) {
   const [exchanges, setExchanges] = React.useState<Exchange[]>([])
   const [products, setProductsState] = React.useState("")
   const [selectedFileIds, setSelectedFileIds] = React.useState<string[]>([])
@@ -120,6 +120,7 @@ export function LiveAssistantPanel({
   selectedFileIds,
   onSelectedFileIdsChange,
   onClear,
+  className,
 }: {
   exchanges: Exchange[]
   products: string
@@ -127,6 +128,7 @@ export function LiveAssistantPanel({
   selectedFileIds: string[]
   onSelectedFileIdsChange: (ids: string[]) => void
   onClear: () => void
+  className?: string
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const stickToBottom = React.useRef(true)
@@ -137,7 +139,7 @@ export function LiveAssistantPanel({
   }, [exchanges])
 
   return (
-    <Card className="flex h-[70svh] min-h-[480px] flex-col">
+    <Card className={className}>
       <CardHeader>
         <CardTitle>LiveBuddy AI</CardTitle>
         <CardDescription>Answers to the comments you sent, ready to read out on stream.</CardDescription>
