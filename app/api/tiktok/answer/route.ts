@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { askWorkBuddy, WorkBuddyNotConfiguredError } from "@/lib/workbuddy/client"
 import type { WorkBuddyAttachment } from "@/lib/workbuddy/types"
+import { classifyTikTokComment } from "@/lib/tiktok/question-filter"
 import { REFERENCE_FILES_BUCKET, REFERENCE_FILES_TABLE, workBuddyAttachmentType } from "@/lib/tiktok/reference-files"
 
 export const dynamic = "force-dynamic"
@@ -24,6 +25,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request body" }, { status: 400 })
   }
   const { comment, nickname, uniqueId, fileIds } = parsed.data
+  const filter = classifyTikTokComment(comment)
+  if (!filter.isQuestion) {
+    return Response.json({ error: `Comment filtered out: ${filter.reason}` }, { status: 422 })
+  }
 
   const supabase = await createClient()
   const {
