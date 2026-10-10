@@ -5,6 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { CheckmarkCircle02Icon, SentIcon } from "@hugeicons/core-free-icons"
 
 import { LiveAssistantPanel, useLiveAssistant } from "@/components/live-assistant"
+import { TikTokReferenceFiles } from "@/components/tiktok-reference-files"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Bubble, BubbleContent, BubbleGroup } from "@/components/ui/bubble"
@@ -26,13 +27,10 @@ type Phase =
 
 const MAX_MESSAGES = 500
 
-type AnswerState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "done"; answer: string }
-  | { kind: "error"; message: string }
+// Chat and AI windows: fixed height while stacked, stretch to the row from xl up.
+const PANEL_CLASS = "flex h-[70svh] min-h-[480px] flex-col xl:h-auto xl:min-h-0"
 
-export function TikTokChatMonitor({ selectedFileIds = [] }: { selectedFileIds?: string[] }) {
+export function TikTokChatMonitor() {
   const [input, setInput] = React.useState("")
   const [phase, setPhase] = React.useState<Phase>({ kind: "idle" })
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
@@ -40,7 +38,8 @@ export function TikTokChatMonitor({ selectedFileIds = [] }: { selectedFileIds?: 
   const sourceRef = React.useRef<EventSource | null>(null)
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const stickToBottom = React.useRef(true)
-  const assistant = useLiveAssistant()
+  const [selectedFileIds, setSelectedFileIds] = React.useState<string[]>([])
+  const assistant = useLiveAssistant(selectedFileIds)
   const asked = React.useMemo(() => new Set(assistant.exchanges.map((e) => e.question.id)), [assistant.exchanges])
   const { ask } = assistant
   const pushToBot = React.useCallback((m: ChatMessage) => ask([m]), [ask])
@@ -135,36 +134,47 @@ export function TikTokChatMonitor({ selectedFileIds = [] }: { selectedFileIds?: 
   const streaming = phase.kind === "live" || phase.kind === "connecting"
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
-      <form onSubmit={onSubmit} className="flex max-w-xl gap-2">
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="TikTok username, e.g. @someone"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <Button type="submit" disabled={busy || !input.trim()}>
-          {phase.kind === "checking" ? "Checking…" : "Search"}
-        </Button>
-        {streaming && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              stopStream()
-              setPhase({ kind: "idle" })
-            }}
-          >
-            Stop
-          </Button>
-        )}
-      </form>
+    // From xl up the three windows share one row that fills the viewport
+    // below the app header; below that they stack and the page scrolls.
+    <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6 xl:h-[calc(100svh-3.5rem)] xl:min-h-[640px] xl:flex-none">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-semibold tracking-tight">TikTok Live</h1>
+          <p className="text-sm text-muted-foreground">
+            Connect to a live stream, send viewer comments to LiveBuddy, and read out the answers.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <form onSubmit={onSubmit} className="flex w-full gap-2 sm:w-auto sm:min-w-96">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="TikTok username, e.g. @someone"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <Button type="submit" disabled={busy || !input.trim()}>
+              {phase.kind === "checking" ? "Checking…" : "Search"}
+            </Button>
+            {streaming && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  stopStream()
+                  setPhase({ kind: "idle" })
+                }}
+              >
+                Stop
+              </Button>
+            )}
+          </form>
+          <StatusLine phase={phase} viewers={viewers} />
+        </div>
+      </div>
 
-      <StatusLine phase={phase} viewers={viewers} />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="flex h-[70svh] min-h-[480px] flex-col">
+      <div className="grid gap-4 lg:grid-cols-2 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(18rem,24rem)] xl:grid-rows-[minmax(0,1fr)]">
+        <Card className={PANEL_CLASS}>
           <CardHeader>
             <CardTitle>Live chat</CardTitle>
             <CardDescription>Press the send button next to a comment to have LiveBuddy answer it.</CardDescription>
@@ -209,11 +219,14 @@ export function TikTokChatMonitor({ selectedFileIds = [] }: { selectedFileIds?: 
           </CardContent>
         </Card>
 
-        <LiveAssistantPanel
-          exchanges={assistant.exchanges}
+        <LiveAssistantPanel exchanges={assistant.exchanges} onClear={assistant.clear} className={PANEL_CLASS} />
+
+        <TikTokReferenceFiles
+          selectedFileIds={selectedFileIds}
+          onSelectedFileIdsChange={setSelectedFileIds}
           products={assistant.products}
           onProductsChange={assistant.setProducts}
-          onClear={assistant.clear}
+          className="flex flex-col lg:col-span-2 xl:col-span-1 xl:min-h-0"
         />
       </div>
     </div>

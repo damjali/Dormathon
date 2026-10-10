@@ -23,7 +23,7 @@ export type Exchange = {
 
 const PRODUCTS_KEY = "livebuddy:products"
 
-export function useLiveAssistant() {
+export function useLiveAssistant(fileIds: string[]) {
   const [exchanges, setExchanges] = React.useState<Exchange[]>([])
   const [products, setProductsState] = React.useState("")
 
@@ -46,7 +46,7 @@ export function useLiveAssistant() {
   }, [])
 
   const answerOne = React.useCallback(
-    async (exchangeId: string, question: ChatMessage, productNotes: string) => {
+    async (exchangeId: string, question: ChatMessage, productNotes: string, contextFileIds: string[]) => {
       const fail = (error: string) => update(exchangeId, () => ({ status: "error", error }))
       try {
         const res = await fetch("/api/assistant", {
@@ -55,6 +55,7 @@ export function useLiveAssistant() {
           body: JSON.stringify({
             products: productNotes,
             comment: { nickname: question.nickname || question.uniqueId, text: question.comment },
+            fileIds: contextFileIds,
           }),
         })
         if (!res.ok || !res.body) {
@@ -98,9 +99,9 @@ export function useLiveAssistant() {
         status: "pending",
       }))
       setExchanges((prev) => [...prev, ...created])
-      for (const e of created) void answerOne(e.id, e.question, products)
+      for (const e of created) void answerOne(e.id, e.question, products, fileIds)
     },
-    [answerOne, products]
+    [answerOne, products, fileIds]
   )
 
   const clear = React.useCallback(() => setExchanges([]), [])
@@ -110,14 +111,12 @@ export function useLiveAssistant() {
 
 export function LiveAssistantPanel({
   exchanges,
-  products,
-  onProductsChange,
   onClear,
+  className,
 }: {
   exchanges: Exchange[]
-  products: string
-  onProductsChange: (value: string) => void
   onClear: () => void
+  className?: string
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const stickToBottom = React.useRef(true)
@@ -128,7 +127,7 @@ export function LiveAssistantPanel({
   }, [exchanges])
 
   return (
-    <Card className="flex h-[70svh] min-h-[480px] flex-col">
+    <Card className={className}>
       <CardHeader>
         <CardTitle>LiveBuddy AI</CardTitle>
         <CardDescription>Answers to the comments you sent, ready to read out on stream.</CardDescription>
@@ -140,18 +139,7 @@ export function LiveAssistantPanel({
           </CardAction>
         )}
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">Product notes</span>
-          <textarea
-            value={products}
-            onChange={(e) => onProductsChange(e.target.value)}
-            rows={3}
-            placeholder="What you're selling today: names, prices, sizes, stock, promos, shipping…"
-            className="w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-          />
-        </label>
-
+      <CardContent className="flex min-h-0 flex-1 flex-col">
         <div
           ref={scrollRef}
           onScroll={(e) => {

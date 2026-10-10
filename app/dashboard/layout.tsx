@@ -13,7 +13,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <span className="text-base font-semibold tracking-tight">LiveBuddy</span>
         </a>
       </header>
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col">{children}</main>
+      <main className="flex w-full flex-1 flex-col">{children}</main>
     </div>
   )
 }
