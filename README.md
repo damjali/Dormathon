@@ -2,6 +2,17 @@
 
 LiveBuddy is an AI co-host for TikTok live sellers. It shows a stream's live chat, lets the host send any viewer comment to an AI with one click, and returns a short answer the host can read out loud. The AI answers from the host's own product notes and uploaded files.
 
+## Try it
+
+**Live site: http://136.85.7.231**
+
+- Open it in any browser. It goes straight to the dashboard, and no sign-in is needed.
+- Use `http://`, not `https://`. The site has no certificate yet, so the browser will show "Not secure".
+- It runs on a Google Compute Engine VM (project `livebuddy-511213`, Singapore). The address is temporary: it changes if the VM is stopped and started, and the VM may be switched off after the hackathon. If the link doesn't load, ask the team for the current address.
+- The site is open to anyone with the link. Don't upload files you wouldn't want others to see or delete.
+
+To run it on your own machine instead, see [Getting started](#getting-started).
+
 ## Why
 
 Live hosts rarely have time to study every product before going on air. Reading one comment, looking up the answer, and replying can take a minute or more, and during that time other viewers leave. LiveBuddy keeps the product knowledge in one place and drafts the answer, so the host only has to pick the comment and speak.
