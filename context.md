@@ -169,46 +169,101 @@ Claude:
   `WORKBUDDY_API_URL`/`WORKBUDDY_API_TOKEN`; if unset, callers get a typed
   `WorkBuddyNotConfiguredError` instead of a crash.
 - `app/api/assistant/route.ts` — `POST {products, comment: {nickname, text},
-  fileIds?}`. Requires a signed-in Supabase user (streams back
-  `{type:"error", message:"Not signed in."}` otherwise, same wire format as
-  any other failure — no special-casing in the client). Resolves `fileIds`
-  via `lib/tiktok/resolve-attachments.ts`, folds the system prompt +
-  product notes + viewer comment into one `text` (WorkBuddy's API has no
-  separate system-message field), diffs each `streamWorkBuddy()` snapshot
-  against the previous one to turn it back into `delta` chunks (so the
-  existing append-only NDJSON protocol and frontend didn't need to change
-  shape), and emits `done`/`error` as before.
+  fileIds?}`. **No login required — anyone who can reach the app can use
+  it** (removed at the user's explicit request; see Changelog). Embeds the
+  viewer's question and retrieves relevant reference-file excerpts (see
+  RAG section below), folds the system prompt + product notes + excerpts +
+  viewer comment into one `text` (WorkBuddy's API has no separate
+  system-message field), diffs each `streamWorkBuddy()` snapshot against
+  the previous one to turn it back into `delta` chunks (so the existing
+  append-only NDJSON protocol and frontend didn't need to change shape),
+  and emits `done`/`error` as before.
 
 **Reference files** — uploaded once, Supabase-backed, reusable across
-sessions instead of re-uploading every time. Browsable directly inside the
-LiveBuddy panel (`ReferenceFilesField` in `live-assistant.tsx`, under the
-"Product notes" textarea) — not a separate page section.
-- `supabase/migrations/20261010_tiktok_reference_files.sql` — table
-  `tiktok_reference_files` (RLS: owner-only) + a **private** Storage bucket
-  `tiktok-reference-files`. No Supabase CLI is wired up in this repo (no
-  `supabase/config.toml`, no project link) — run this migration by pasting
-  it into the Supabase project's SQL editor.
+sessions instead of re-uploading every time, and **shared by everyone**
+(no per-user ownership — see Changelog). Browsable directly inside the
+LiveBuddy layout, in its own panel (`components/tiktok-reference-files.tsx`,
+rendered alongside `LiveAssistantPanel` — not nested inside it; see that
+component's own file for why).
+- `supabase/migrations/20261010_tiktok_reference_files.sql` +
+  `20261011_tiktok_reference_files_public.sql` — table
+  `tiktok_reference_files` (originally owner-scoped, now public — the
+  second migration drops the `user_id` FK/NOT NULL and opens the RLS
+  policy) + a **private** Storage bucket `tiktok-reference-files` (private
+  only in the sense of "not directly browsable"; every row is visible to
+  every caller of `/api/tiktok/files`). No Supabase CLI is wired up in this
+  repo (no `supabase/config.toml`, no project link) — run migrations by
+  pasting them into the Supabase project's SQL editor, in filename order.
 - `lib/tiktok/reference-files.ts` — shared bucket/table name constants,
   `ReferenceFile` type (client-safe — no server-only imports), 20MB upload
-  cap, content-type → WorkBuddy attachment `type` mapping
-  (`image`/`video`/`file`).
-- `lib/tiktok/resolve-attachments.ts` — `server-only`; turns a user's
-  selected file ids into signed-URL `WorkBuddyAttachment[]`, used by
-  `app/api/assistant`. Ignores ids that don't belong to the caller instead
-  of erroring (a stale selection shouldn't block answering).
-- `app/api/tiktok/files/route.ts` (`GET` list, `POST` upload) and
-  `app/api/tiktok/files/[id]/route.ts` (`DELETE`) — all storage/table access
-  goes through `lib/supabase/admin.ts`'s service-role client (bucket is
-  private; RLS policy is a backstop, not the actual access path), scoped to
-  `auth.getUser()`'s id taken from the normal cookie session.
+  cap, `referenceFileKind()`/`REFERENCE_FILE_ACCEPT` (only `.txt`/`.md`/
+  `.pdf`/`.docx` are accepted — these are exactly the kinds
+  `lib/tiktok/extract-text.ts` can turn into plain text for embedding).
+- `app/api/tiktok/files/route.ts` (`GET` list, `POST` upload — calls
+  `indexReferenceFile()` synchronously before responding, see below) and
+  `app/api/tiktok/files/[id]/route.ts` (`DELETE` — chunk rows cascade-delete
+  via FK, no extra code needed). All storage/table access goes through
+  `lib/supabase/admin.ts`'s service-role client.
+
+**RAG (retrieval-augmented generation) over reference files** — added
+after discovering that handing WorkBuddy a *whole file* as a
+`payload.attachments` entry was both slow and, for PDFs, broken (see
+Changelog for the full diagnosis). Chunk + embed once at upload time;
+at question time, embed the question and pull back only the few chunks
+that are actually relevant.
+- `lib/tiktok/extract-text.ts` — `server-only`; turns an uploaded file's
+  bytes into plain text: `.txt`/`.md` as-is, `.docx` via `mammoth`, `.pdf`
+  via `pdf-parse` v2's `PDFParse` class (`new PDFParse({data: buffer})`,
+  then `.getText()` — **not** the v1-style default-export function API;
+  v2 is a ground-up rewrite).
+- `lib/tiktok/chunk-text.ts` — paragraph-aware splitter, ~800 chars/chunk
+  with 150-char overlap, hard-splits paragraphs that exceed the chunk size
+  on their own. No dependency — plain string logic, good enough for
+  sales-Q&A-length reference docs (not tuned for book-length documents).
+- `lib/tiktok/embeddings.ts` — `fastembed` (`Xenova/all-MiniLM-L6-v2`,
+  384 dims), running fully **locally in the Node process — no API key, no
+  external embedding service**. The ONNX model downloads once (~90MB, to
+  `./local_cache/`, gitignored) and takes ~30s to load; a module-level
+  singleton (`getModel()`) keeps it warm for the life of the server
+  process, so only the very first embed call after a server (re)start
+  pays that cost — everything after is tens of milliseconds.
+  - Tried `@xenova/transformers` first — it eagerly imports image-processing
+    code (`sharp`) even for pure text use, and `sharp`'s native binary
+    wasn't buildable on this machine (pnpm skips postinstall scripts by
+    default; `pnpm rebuild sharp` didn't fix it). Switched to `fastembed`,
+    which has no such dependency.
+- `lib/tiktok/index-file.ts` — `indexReferenceFile(fileId, fileName,
+  buffer)`: extract → chunk → embed → bulk-insert into
+  `tiktok_reference_chunks`. Called synchronously from the upload route;
+  if it throws, the route rolls back the storage upload and the
+  `tiktok_reference_files` row rather than leaving an unsearchable file
+  with no explanation later.
+- `lib/tiktok/retrieve-context.ts` — `retrieveContext(question, fileIds)`:
+  embeds the question, calls the `match_reference_chunks` Postgres function
+  (cosine similarity via pgvector, optionally restricted to the host's
+  selected file ids), drops anything below a `0.3` similarity floor, returns
+  the matched chunk texts for `/api/assistant` to inline under
+  `<reference_excerpts>`.
+- `supabase/migrations/20261011_reference_chunks_vector_search.sql` —
+  `create extension vector`, table `tiktok_reference_chunks` (`file_id` FK
+  `on delete cascade`, `embedding vector(384)`, HNSW index on
+  `vector_cosine_ops`), and the `match_reference_chunks(query_embedding,
+  match_count, filter_file_ids)` SQL function.
+- This fully replaces the earlier `payload.attachments`-based approach
+  (`lib/tiktok/resolve-attachments.ts`, deleted) — WorkBuddy never sees a
+  file reference at all now, only plain excerpt text already inlined in
+  the prompt.
 
 **One-time setup (nobody has done this yet):**
-1. Run the migration SQL above in the Supabase project's SQL editor, and
-   set `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` (Project Settings → API
-   → `service_role` key — **never** expose this to the client).
+1. Run both `supabase/migrations/2026101*` SQL files in the Supabase
+   project's SQL editor, in filename order, and set
+   `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` (Project Settings → API →
+   `service_role` key — **never** expose this to the client).
 2. On the machine that should answer questions: `codebuddy /login` once
-   (interactive), then keep `codebuddy --serve --port 8321` running. Set
-   `WORKBUDDY_API_URL`/`WORKBUDDY_API_TOKEN` in `.env.local` from its
+   (interactive — see Changelog for why the bundled Electron-app copy of
+   the CLI can't do this and you need the real `@tencent-ai/codebuddy-code`
+   npm package instead), then keep `codebuddy --serve --port 8321` running.
+   Set `WORKBUDDY_API_URL`/`WORKBUDDY_API_TOKEN` in `.env.local` from its
    printed output. This is a local gateway (`127.0.0.1`) tied to one
    machine's logged-in WorkBuddy session — it is not something Vercel's
    production deployment can reach, so answering only works when run
@@ -216,16 +271,68 @@ LiveBuddy panel (`ReferenceFilesField` in `live-assistant.tsx`, under the
    machine that's reachable at `WORKBUDDY_API_URL`).
 
 **Deferred / explicitly not done:**
+- No auth anywhere in this feature, by design — see Changelog. Anyone who
+  can reach `/dashboard` can upload/delete shared reference files and spend
+  the WorkBuddy account's credits (same credit pool as the desktop app —
+  confirmed via `~/.codebuddy` logs showing both hit the same
+  `userId`/`codebuddy.ai` account).
 - `ANTHROPIC_API_KEY`/`@anthropic-ai/sdk` are no longer used by this route
   (left in `package.json` from the pre-WorkBuddy version; harmless if
   unused, but worth removing in a cleanup pass if nothing else needs them).
 - No retry/backoff if the WorkBuddy gateway is mid-restart.
-- No way to edit an uploaded file's name/description after upload.
+- No way to edit an uploaded file's name/description after upload, or to
+  re-index a file without deleting and re-uploading it.
+- Chunking is character-count-based, not sentence-aware, so a chunk can cut
+  off mid-word when a paragraph is longer than ~800 chars (PDF extraction
+  in particular tends to produce few, long "paragraphs" since page layout
+  isn't preserved as blank-line breaks) — acceptable for short sales
+  reference docs, would want sentence-boundary splitting for longer ones.
 - The `/dashboard/*` auth-middleware gap noted in the Emails section above
-  also applies here — these API routes check `auth.getUser()` themselves,
-  but the *page* isn't gated by middleware.
+  is now moot for this feature specifically (nothing here checks auth at
+  all any more) but the gap itself is still real for anything else that
+  might rely on middleware-level gating.
 
 ## Changelog
+
+- 2026-10-10 — Three more passes on the LiveBuddy/reference-files feature,
+  same day as the initial WorkBuddy wiring below:
+  1. **Resolved a bad merge**: `tiktok-chat-monitor.tsx` had been restructured
+     into a 3-panel layout (chat / LiveBuddy answers / reference files) that
+     imported a `components/tiktok-reference-files.tsx` that was never
+     created, had duplicate/conflicting props on one JSX element, a missing
+     `PANEL_CLASS` constant, and an unused `fileIds` param injected into
+     `useLiveAssistant()`. Recreated `tiktok-reference-files.tsx` properly
+     (moved the product-notes + file-browser UI out of `live-assistant.tsx`
+     into it), fixed the duplicate props, added `PANEL_CLASS`, and deleted
+     `lib/assistant/context-files.ts` — dead code from a never-wired-up,
+     pre-WorkBuddy attempt at file attachments (needed `@anthropic-ai/sdk` +
+     `mammoth`, neither installed, and a `user_id` ownership model that no
+     longer exists).
+  2. **Removed auth entirely**, at explicit user request ("make sure
+     there's no login, anyone can use this system"): dropped
+     `auth.getUser()` checks from `/api/assistant` and
+     `/api/tiktok/files(+[id])`, and migrated `tiktok_reference_files` to
+     drop its `user_id` FK/NOT NULL and open its RLS policy
+     (`20261011_tiktok_reference_files_public.sql`). Reference files are
+     now a shared pool, not per-user.
+  3. **Diagnosed and fixed "attaching a file makes replies take forever"**
+     by actually instrumenting the gateway (`--debug`, then reading
+     `~/.codebuddy/logs/<date>/<project>.log` directly) instead of
+     guessing: a `payload.attachments` entry with `urlType: "url"` doesn't
+     get read inline — the model calls its own `WebFetch` tool on the URL,
+     costing ~20s across two extra model turns, every single question. The
+     "obvious" fix, `urlType: "local-path"`, cut a plain-text attachment
+     from ~30s to ~10s but made a PDF attachment take 67s and then
+     **error out** (`finish_flag: "interrupt"`) — a bug in WorkBuddy's own
+     local-PDF handling, not fixable from here. Replaced the whole
+     attachment-based approach with retrieval: chunk + embed each file at
+     upload time, vector-search for relevant chunks at question time, and
+     inline just those as plain text (see the RAG section above). Deleted
+     `lib/tiktok/resolve-attachments.ts` (the attachment-URL approach it
+     implemented is now fully superseded). This fix was prompted by the
+     user explicitly asking for RAG over the reference files — the
+     attachment approach would likely have needed replacing anyway, but
+     the latency/reliability findings are what confirmed it.
 
 - 2026-10-10 — A teammate merged in a full rebuild of the TikTok Live page
   as "LiveBuddy": chat bubbles (`components/ui/bubble.tsx`, `message.tsx`,

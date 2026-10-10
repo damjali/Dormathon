@@ -22,6 +22,7 @@
     "@tanstack/react-table": "^9.2.4",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.3.0",
+    "fastembed": "^3.0.0",
     "imapflow": "^2.0.5",
     "mailparser": "^3.9.28",
     "mammoth": "^1.13.0",

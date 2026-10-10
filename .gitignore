@@ -37,6 +37,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# fastembed's downloaded ONNX model cache (lib/tiktok/embeddings.ts) — large
+# binary, regenerated on first run, never belongs in git
+/local_cache
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -7,6 +7,7 @@ import {
   referenceFileKind,
   type ReferenceFile,
 } from "@/lib/tiktok/reference-files"
+import { indexReferenceFile } from "@/lib/tiktok/index-file"
 
 export const dynamic = "force-dynamic"
 
@@ -74,6 +75,19 @@ export async function POST(request: Request) {
   if (insertError) {
     await admin.storage.from(REFERENCE_FILES_BUCKET).remove([storagePath])
     return Response.json({ error: insertError.message }, { status: 500 })
+  }
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer())
+    await indexReferenceFile(row.id, file.name, buffer)
+  } catch (err) {
+    // Roll back — a file nobody can search against is worse than no file,
+    // and silently leaving it un-indexed would make "Answer" miss it later
+    // with no explanation.
+    await admin.storage.from(REFERENCE_FILES_BUCKET).remove([storagePath])
+    await admin.from(REFERENCE_FILES_TABLE).delete().eq("id", row.id)
+    const message = err instanceof Error ? err.message : "Failed to index file for search"
+    return Response.json({ error: message }, { status: 500 })
   }
 
   const result: ReferenceFile = {
