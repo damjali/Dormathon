@@ -124,46 +124,68 @@ export function TikTokReferenceFiles({
 
   return (
     <Card className={className}>
-      <CardHeader>
-        <CardTitle>Reference</CardTitle>
-        <CardDescription>What LiveBuddy knows before answering the next comment.</CardDescription>
+      <CardHeader className="flex h-[124px] min-h-[124px] shrink-0 flex-col justify-center gap-2 border-b border-[#e5e5e8] bg-[#f4f4f5] px-5 py-4">
+        <div className="flex items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#161823] text-white shadow-sm shadow-black/10">
+            <ReferenceIcon />
+          </span>
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-base font-semibold">Product context</CardTitle>
+            <CardDescription className="mt-1 line-clamp-2 min-h-8 text-xs leading-4">
+              Give LiveBuddy accurate details to use in its replies.
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 pt-1">
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">Product notes</span>
+          <span className="flex items-center justify-between font-medium">
+            Product notes
+            <span className="text-[10px] font-normal uppercase tracking-wider text-muted-foreground">Saved in this browser</span>
+          </span>
           <textarea
             value={products}
             onChange={(e) => onProductsChange(e.target.value)}
             rows={3}
             placeholder="What you're selling today: names, prices, sizes, stock, promos, shipping…"
-            className="w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            className="w-full resize-y rounded-xl border border-[#e5e5e8] bg-[#f7f7f8] px-3 py-2.5 text-sm leading-5 outline-none transition-colors placeholder:text-muted-foreground/75 focus-visible:border-[#25c9c4]/55 focus-visible:bg-white focus-visible:ring-3 focus-visible:ring-[#25c9c4]/10"
           />
         </label>
 
         <div className="flex min-h-0 flex-1 flex-col gap-1.5 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="font-medium">Reference files</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-col">
+              <span className="font-medium">Reference files</span>
+              <span className="text-xs text-muted-foreground">PDF, Word, or text documents</span>
+            </div>
             <Button
               type="button"
-              size="xs"
+              size="sm"
               variant="outline"
               disabled={uploading}
               onClick={() => inputRef.current?.click()}
+              className="shrink-0 rounded-xl border-[#161823] bg-[#161823] text-white hover:bg-[#252632] hover:text-white"
             >
               {uploading ? "Uploading…" : "Upload"}
             </Button>
             <input ref={inputRef} type="file" accept={REFERENCE_FILE_ACCEPT} className="hidden" onChange={onUpload} />
           </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-input">
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-[#e5e5e8] bg-[#f7f7f8]">
             {files === null ? (
-              <p className="px-2.5 py-2 text-xs text-muted-foreground">Loading…</p>
+              <p className="px-3 py-3 text-xs text-muted-foreground">Loading reference files…</p>
             ) : files.length === 0 ? (
-              <p className="px-2.5 py-2 text-xs text-muted-foreground">No files uploaded yet.</p>
+              <div className="flex h-full min-h-24 flex-col items-center justify-center px-4 py-5 text-center">
+                <span className="mb-2 flex size-8 items-center justify-center rounded-lg bg-background text-muted-foreground ring-1 ring-border">
+                  <ReferenceIcon />
+                </span>
+                <p className="text-xs font-medium">No reference files yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">Upload product details for more informed answers.</p>
+              </div>
             ) : (
-              <ul className="divide-y divide-input">
+              <ul className="divide-y divide-border/70">
                 {files.map((f) => (
-                  <li key={f.id} className="flex items-center gap-2 px-2 py-1.5">
+                  <li key={f.id} className="flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-muted/40">
                     <Checkbox
                       id={`ref-file-${f.id}`}
                       checked={selectedFileIds.includes(f.id)}
@@ -208,5 +230,14 @@ export function TikTokReferenceFiles({
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function ReferenceIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-4">
+      <path d="M13.5 3H6.75A1.75 1.75 0 0 0 5 4.75v14.5A1.75 1.75 0 0 0 6.75 21h10.5A1.75 1.75 0 0 0 19 19.25V8.5L13.5 3Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M13 3.5V9h5.5M8.5 13h7m-7 3.5h7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
