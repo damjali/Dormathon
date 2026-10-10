@@ -27,9 +27,6 @@ type Phase =
 
 const MAX_MESSAGES = 500
 
-// Chat and AI windows: fixed height while stacked, stretch to the row from xl up.
-const PANEL_CLASS = "flex h-[70svh] min-h-[480px] flex-col xl:h-auto xl:min-h-0"
-
 export function TikTokChatMonitor() {
   const [input, setInput] = React.useState("")
   const [phase, setPhase] = React.useState<Phase>({ kind: "idle" })
@@ -226,7 +223,9 @@ export function TikTokChatMonitor() {
           onSelectedFileIdsChange={setSelectedFileIds}
           products={assistant.products}
           onProductsChange={assistant.setProducts}
-          className="flex flex-col lg:col-span-2 xl:col-span-1 xl:min-h-0"
+          selectedFileIds={assistant.selectedFileIds}
+          onSelectedFileIdsChange={assistant.setSelectedFileIds}
+          onClear={assistant.clear}
         />
       </div>
     </div>
