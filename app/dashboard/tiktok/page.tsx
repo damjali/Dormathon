@@ -1,7 +1,7 @@
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { TikTokChatMonitor } from "@/components/tiktok-chat-monitor"
+import { TikTokDashboard } from "@/components/tiktok-dashboard"
 
 export default function TikTokPage() {
   return (
@@ -17,7 +17,7 @@ export default function TikTokPage() {
           </BreadcrumbList>
         </Breadcrumb>
       </header>
-      <TikTokChatMonitor />
+      <TikTokDashboard />
     </>
   )
 }

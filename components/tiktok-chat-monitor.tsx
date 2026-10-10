@@ -19,7 +19,13 @@ type Phase =
 
 const MAX_MESSAGES = 500
 
-export function TikTokChatMonitor() {
+type AnswerState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "done"; answer: string }
+  | { kind: "error"; message: string }
+
+export function TikTokChatMonitor({ selectedFileIds = [] }: { selectedFileIds?: string[] }) {
   const [input, setInput] = React.useState("")
   const [phase, setPhase] = React.useState<Phase>({ kind: "idle" })
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
@@ -27,6 +33,31 @@ export function TikTokChatMonitor() {
   const sourceRef = React.useRef<EventSource | null>(null)
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const stickToBottom = React.useRef(true)
+  const [answers, setAnswers] = React.useState<Record<string, AnswerState>>({})
+
+  async function askWorkBuddy(message: ChatMessage) {
+    setAnswers((prev) => ({ ...prev, [message.id]: { kind: "loading" } }))
+    try {
+      const res = await fetch("/api/tiktok/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          comment: message.comment,
+          nickname: message.nickname,
+          uniqueId: message.uniqueId,
+          fileIds: selectedFileIds,
+        }),
+      })
+      const body = await res.json()
+      if (!res.ok) {
+        setAnswers((prev) => ({ ...prev, [message.id]: { kind: "error", message: body.error ?? "Failed to get an answer." } }))
+        return
+      }
+      setAnswers((prev) => ({ ...prev, [message.id]: { kind: "done", answer: body.answer } }))
+    } catch {
+      setAnswers((prev) => ({ ...prev, [message.id]: { kind: "error", message: "Network error." } }))
+    }
+  }
 
   const stopStream = React.useCallback(() => {
     sourceRef.current?.close()
@@ -118,7 +149,7 @@ export function TikTokChatMonitor() {
   const streaming = phase.kind === "live" || phase.kind === "connecting"
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+    <div className="flex flex-1 flex-col gap-4">
       <form onSubmit={onSubmit} className="flex max-w-xl gap-2">
         <Input
           value={input}
@@ -166,26 +197,47 @@ export function TikTokChatMonitor() {
                   : "Search a username to see its live chat here."}
               </p>
             ) : (
-              messages.map((m) => (
-                <div key={m.id} className="flex items-start gap-2 text-sm">
-                  {m.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={m.avatarUrl}
-                      alt=""
-                      className="size-6 shrink-0 rounded-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="size-6 shrink-0 rounded-full bg-muted" />
-                  )}
-                  <div className="min-w-0">
-                    <span className="font-medium">{m.nickname}</span>
-                    {m.uniqueId && <span className="ml-1 text-xs text-muted-foreground">@{m.uniqueId}</span>}
-                    <p className="break-words">{m.comment}</p>
+              messages.map((m) => {
+                const answer = answers[m.id] ?? { kind: "idle" as const }
+                return (
+                  <div key={m.id} className="flex flex-col gap-1">
+                    <div className="flex items-start gap-2 text-sm">
+                      {m.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={m.avatarUrl}
+                          alt=""
+                          className="size-6 shrink-0 rounded-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="size-6 shrink-0 rounded-full bg-muted" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <span className="font-medium">{m.nickname}</span>
+                        {m.uniqueId && <span className="ml-1 text-xs text-muted-foreground">@{m.uniqueId}</span>}
+                        <p className="break-words">{m.comment}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        className="shrink-0"
+                        disabled={answer.kind === "loading"}
+                        onClick={() => askWorkBuddy(m)}
+                      >
+                        {answer.kind === "loading" ? "Asking…" : "Answer"}
+                      </Button>
+                    </div>
+                    {answer.kind === "done" && (
+                      <p className="ml-8 rounded-md bg-muted px-2 py-1.5 text-sm whitespace-pre-wrap">{answer.answer}</p>
+                    )}
+                    {answer.kind === "error" && (
+                      <p className="ml-8 text-sm text-destructive">{answer.message}</p>
+                    )}
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         </CardContent>
