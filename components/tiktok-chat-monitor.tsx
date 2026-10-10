@@ -27,6 +27,10 @@ type Phase =
 
 const MAX_MESSAGES = 500
 
+// Shared sizing for the three side-by-side panels: fills the row in the xl
+// 3-column layout, falls back to a sane min-height when stacked.
+const PANEL_CLASS = "flex min-h-[420px] flex-col xl:h-full xl:min-h-0"
+
 export function TikTokChatMonitor() {
   const [input, setInput] = React.useState("")
   const [phase, setPhase] = React.useState<Phase>({ kind: "idle" })
@@ -35,8 +39,7 @@ export function TikTokChatMonitor() {
   const sourceRef = React.useRef<EventSource | null>(null)
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const stickToBottom = React.useRef(true)
-  const [selectedFileIds, setSelectedFileIds] = React.useState<string[]>([])
-  const assistant = useLiveAssistant(selectedFileIds)
+  const assistant = useLiveAssistant()
   const asked = React.useMemo(() => new Set(assistant.exchanges.map((e) => e.question.id)), [assistant.exchanges])
   const { ask } = assistant
   const pushToBot = React.useCallback((m: ChatMessage) => ask([m]), [ask])
@@ -219,13 +222,11 @@ export function TikTokChatMonitor() {
         <LiveAssistantPanel exchanges={assistant.exchanges} onClear={assistant.clear} className={PANEL_CLASS} />
 
         <TikTokReferenceFiles
-          selectedFileIds={selectedFileIds}
-          onSelectedFileIdsChange={setSelectedFileIds}
           products={assistant.products}
           onProductsChange={assistant.setProducts}
           selectedFileIds={assistant.selectedFileIds}
           onSelectedFileIdsChange={assistant.setSelectedFileIds}
-          onClear={assistant.clear}
+          className={PANEL_CLASS}
         />
       </div>
     </div>

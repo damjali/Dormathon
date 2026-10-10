@@ -2,7 +2,6 @@ import { z } from "zod"
 import { streamWorkBuddy, WorkBuddyNotConfiguredError } from "@/lib/workbuddy/client"
 import { resolveWorkBuddyAttachments } from "@/lib/tiktok/resolve-attachments"
 import type { AssistantEvent } from "@/lib/assistant/types"
-import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
 
