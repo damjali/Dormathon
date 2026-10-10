@@ -17,7 +17,7 @@ export class WorkBuddyNotConfiguredError extends Error {
 // run's transcript (GET .../stream then 404s with RUN_NOT_FOUND) once the
 // run finishes, so there's no reliable polling fallback.
 export async function* streamWorkBuddy(
-  { text, attachments }: AskWorkBuddyParams,
+  { text, attachments, workspaceDirs }: AskWorkBuddyParams,
   { timeoutMs = 90_000 }: { timeoutMs?: number } = {}
 ): AsyncGenerator<string> {
   const config = getWorkBuddyConfig()
@@ -27,6 +27,10 @@ export async function* streamWorkBuddy(
   const headers = {
     Authorization: `Bearer ${token}`,
     "X-CodeBuddy-Request": "1",
+  }
+
+  for (const dir of workspaceDirs ?? []) {
+    await addWorkspaceDir(baseUrl, headers, dir)
   }
 
   const postRes = await fetch(`${baseUrl}/api/v1/runs`, {
@@ -80,6 +84,37 @@ export async function* streamWorkBuddy(
   } finally {
     clearTimeout(timeout)
   }
+}
+
+async function addWorkspaceDir(baseUrl: string, headers: Record<string, string>, dir: string) {
+  if (await hasWorkspaceDir(baseUrl, headers, dir)) return
+
+  const res = await fetch(`${baseUrl}/api/v1/workspace-dirs`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ path: dir }),
+  })
+
+  if (!res.ok) {
+    throw new Error(`WorkBuddy could not attach product docs directory (${res.status}): ${await res.text()}`)
+  }
+}
+
+async function hasWorkspaceDir(baseUrl: string, headers: Record<string, string>, dir: string) {
+  const res = await fetch(`${baseUrl}/api/v1/workspace-dirs`, { headers })
+  if (!res.ok) return false
+
+  const body = await res.json().catch(() => null)
+  return containsDir(body, dir)
+}
+
+function containsDir(value: unknown, dir: string): boolean {
+  if (typeof value === "string") return value === dir
+  if (Array.isArray(value)) return value.some((item) => containsDir(item, dir))
+  if (value && typeof value === "object") {
+    return Object.values(value).some((item) => containsDir(item, dir))
+  }
+  return false
 }
 
 // Convenience wrapper over streamWorkBuddy() for callers that just want the
