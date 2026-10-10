@@ -14,25 +14,47 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+type PrimeState =
+  | { kind: "idle" }
+  | { kind: "priming" }
+  | { kind: "done"; fileIds: string[] }
+  | { kind: "error"; message: string }
+
+function sameIds(a: string[], b: string[]) {
+  if (a.length !== b.length) return false
+  const sorted = [...b].sort()
+  return [...a].sort().every((id, i) => id === sorted[i])
+}
+
 // Product notes + reference-file browser/uploader: what LiveBuddy should
 // know before answering the next comment. Files persist in Supabase (see
 // /api/tiktok/files), so they don't need re-uploading next stream.
+//
+// "Set as context" starts a fresh WorkBuddy session primed with the EXACT
+// text of the checked files (/api/tiktok/prime via onSetContext) — not
+// added to whatever the old session had, not chunked/embedded. See
+// context.md for why: WorkBuddy's own attachment/tool-reading path is both
+// slow and, for the agent's Bash tool in particular, not something that
+// should run against untrusted viewer chat input.
 export function TikTokReferenceFiles({
   products,
   onProductsChange,
   selectedFileIds,
   onSelectedFileIdsChange,
+  onSetContext,
   className,
 }: {
   products: string
   onProductsChange: (value: string) => void
   selectedFileIds: string[]
   onSelectedFileIdsChange: (ids: string[]) => void
+  onSetContext: (fileIds: string[]) => Promise<{ fileCount: number }>
   className?: string
 }) {
   const [files, setFiles] = React.useState<ReferenceFile[] | null>(null)
   const [uploading, setUploading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [primeState, setPrimeState] = React.useState<PrimeState>({ kind: "idle" })
   const inputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
@@ -76,6 +98,9 @@ export function TikTokReferenceFiles({
     const prev = files
     setFiles((p) => p?.filter((f) => f.id !== id) ?? null)
     onSelectedFileIdsChange(selectedFileIds.filter((f) => f !== id))
+    if (primeState.kind === "done" && primeState.fileIds.includes(id)) {
+      setPrimeState({ kind: "idle" })
+    }
 
     const res = await fetch(`/api/tiktok/files/${id}`, { method: "DELETE" })
     if (!res.ok) {
@@ -84,6 +109,18 @@ export function TikTokReferenceFiles({
       setError(body?.error ?? "Could not delete file.")
     }
   }
+
+  async function setAsContext() {
+    setPrimeState({ kind: "priming" })
+    try {
+      await onSetContext(selectedFileIds)
+      setPrimeState({ kind: "done", fileIds: selectedFileIds })
+    } catch (err) {
+      setPrimeState({ kind: "error", message: err instanceof Error ? err.message : "Could not set context." })
+    }
+  }
+
+  const isStale = primeState.kind === "done" && !sameIds(primeState.fileIds, selectedFileIds)
 
   return (
     <Card className={className}>
@@ -150,6 +187,24 @@ export function TikTokReferenceFiles({
               </ul>
             )}
           </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={selectedFileIds.length === 0 || primeState.kind === "priming"}
+              onClick={setAsContext}
+            >
+              {primeState.kind === "priming" ? "Setting context…" : "Set as context"}
+            </Button>
+            {primeState.kind === "done" && !isStale && (
+              <span className="text-xs text-muted-foreground">
+                ✓ {primeState.fileIds.length} file{primeState.fileIds.length === 1 ? "" : "s"} set for this session
+              </span>
+            )}
+            {isStale && <span className="text-xs text-muted-foreground">Selection changed — set again to update</span>}
+          </div>
+          {primeState.kind === "error" && <p className="text-xs text-destructive">{primeState.message}</p>}
         </div>
       </CardContent>
     </Card>

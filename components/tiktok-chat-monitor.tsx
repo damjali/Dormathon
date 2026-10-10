@@ -226,6 +226,7 @@ export function TikTokChatMonitor() {
           onProductsChange={assistant.setProducts}
           selectedFileIds={assistant.selectedFileIds}
           onSelectedFileIdsChange={assistant.setSelectedFileIds}
+          onSetContext={assistant.primeContext}
           className={PANEL_CLASS}
         />
       </div>

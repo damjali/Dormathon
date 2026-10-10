@@ -100,133 +100,226 @@ credentials configured):**
 ## Feature: TikTok Live ("LiveBuddy")
 
 **Goal:** watch a TikTok creator's live chat from inside the dashboard
-(now the `/dashboard` home page), pick a viewer's comment to send to an AI
+(the `/dashboard` home page), pick a viewer's comment to send to an AI
 co-host ("LiveBuddy"), and get a short, speakable answer back — grounded in
 free-text product notes and/or uploaded reference files — that the host
-reads out loud on stream.
+reads out loud on stream. **No login anywhere in this feature** — removed
+at explicit user request ("make sure there's no login, anyone can use this
+system"); every reference file is a shared pool, not scoped per user.
 
 **Live chat** — pure TypeScript, connecting over TikTok's webcast protocol
-with `tiktok-live-connector`. No TikTok API credentials needed; the
-underlying library reverse-engineers TikTok's public LIVE websocket.
+with `tiktok-live-connector`. No TikTok API credentials needed.
 - `app/api/tiktok/live/route.ts` — `GET ?username=` — checks whether a user
-  is currently live (`TikTokLiveConnection#fetchIsLive`).
-- `app/api/tiktok/chat/route.ts` — `GET ?username=` — the streaming entry
-  point. Opens a `TikTokLiveConnection`, relays `WebcastEvent.CHAT` /
-  `ROOM_USER` / `STREAM_END` and `ControlEvent.DISCONNECTED` /
-  `ERROR` out to the browser as Server-Sent Events.
-- `lib/tiktok/map-chat.ts`, `lib/tiktok/types.ts`, `lib/tiktok/username.ts` —
-  payload normalization, shared `ChatMessage`/`StreamEvent` types, username
-  parsing.
+  is currently live.
+- `app/api/tiktok/chat/route.ts` — `GET ?username=` — streams
+  `WebcastEvent.CHAT`/`ROOM_USER`/`STREAM_END` etc. to the browser as SSE.
+- `lib/tiktok/map-chat.ts`, `types.ts`, `username.ts` — normalization,
+  shared types, username parsing.
 - `components/tiktok-chat-monitor.tsx` — subscribes via `EventSource`,
-  groups consecutive messages per viewer into chat bubbles
-  (`components/ui/bubble.tsx`, `message.tsx`, `marker.tsx`), and renders a
-  "send" icon button next to each comment that pushes it to LiveBuddy. This
-  is now `/dashboard`'s home page (`app/dashboard/page.tsx`) — the earlier
-  separate `/dashboard/tiktok` route was removed.
+  groups messages into chat bubbles, and has a send button per comment that
+  pushes it to LiveBuddy. This is `/dashboard`'s home page.
 
-**LiveBuddy AI panel** (`components/live-assistant.tsx`) — the right-hand
-column. `useLiveAssistant()` owns: `exchanges` (question/answer pairs sent
-so far), `products` (free-text notes, persisted to `localStorage`), and
-`selectedFileIds` (which uploaded reference files apply to the *next*
-question, in-memory only). Clicking a chat bubble's send button calls
-`ask([message])`, which POSTs to `/api/assistant` and streams the reply
-into that exchange via newline-delimited JSON (`lib/assistant/types.ts`:
-`delta`/`done`/`error`).
+**LiveBuddy AI panel** (`components/live-assistant.tsx`) — `useLiveAssistant()`
+owns `exchanges` (the Q&A transcript), `products` (free-text notes,
+`localStorage`-persisted), `selectedFileIds` (which reference files are
+checked right now), and — critically — **one `sessionId`
+(`crypto.randomUUID()`) generated once per page load** and reused for every
+WorkBuddy call made during that page's lifetime. `LiveAssistantPanel` is
+just the transcript + Clear button; `components/tiktok-reference-files.tsx`
+is a separate panel for product notes, the file browser/uploader, and the
+"Set as context" button.
 
-Originally this called the Anthropic API directly. **Replaced with the
-local WorkBuddy AI gateway** so answers actually come from WorkBuddy, not
-Claude:
-- WorkBuddy AI (the desktop app, `WorkBuddyAI.exe`) bundles a CLI
-  ("CodeBuddy Code") that can run as a local HTTP gateway:
-  `codebuddy --serve --port 8321` (after a one-time `codebuddy /login`),
-  which prints an endpoint + bearer password. Full docs:
-  https://www.workbuddy.ai/docs/cli/http-api — but verified directly
-  against the running gateway since the docs don't cover the SSE event
-  schema. Two endpoints matter and are *not* interchangeable:
-  - `POST /api/v1/runs` (`{id, type: "message", payload: {text, attachments}}`)
-    — a plain conversational turn. This is what we use.
-  - `POST /api/v1/jobs` (`{prompt, cwd, ...}`) — spawns an autonomous
-    **coding agent process** with filesystem access, defaulting `cwd` to
-    wherever the CLI was invoked from. **Do not** wire untrusted chat input
-    (e.g. TikTok viewer comments) into this endpoint — confirmed by testing
-    that it really does spawn a real OS process against a real working
-    directory, a prompt-injection/arbitrary-agentic-action risk for public
-    chat input.
-  - A run's reply only exists on `GET /api/v1/runs/:runId/stream` (SSE)
-    while the run is in-flight; once it settles the gateway 404s
-    (`RUN_NOT_FOUND`) if you fetch the stream afterward, and
-    `GET /api/v1/runs/:runId` (poll) doesn't expose the result content,
-    only `{ runId, active }`. So the stream must be opened immediately
-    after the `POST`, not polled lazily. Event shape (undocumented,
-    captured live): `event: message` →
-    `data: {version, replyTo, status, content: {markdown}, agent: {...}}`,
-    then `event: done`. Each `message` event carries the *full* answer so
-    far, not a delta.
-- `lib/workbuddy/client.ts` — `streamWorkBuddy({text, attachments})`: POSTs
-  the run, immediately opens the SSE stream, and yields each
-  full-answer-so-far snapshot. `askWorkBuddy()` is a thin wrapper that just
-  returns the last snapshot. `lib/workbuddy/config.ts` reads
-  `WORKBUDDY_API_URL`/`WORKBUDDY_API_TOKEN`; if unset, callers get a typed
-  `WorkBuddyNotConfiguredError` instead of a crash.
-- `app/api/assistant/route.ts` — `POST {products, comment: {nickname, text},
-  fileIds?}`. Requires a signed-in Supabase user (streams back
-  `{type:"error", message:"Not signed in."}` otherwise, same wire format as
-  any other failure — no special-casing in the client). Resolves `fileIds`
-  via `lib/tiktok/resolve-attachments.ts`, folds the system prompt +
-  product notes + viewer comment into one `text` (WorkBuddy's API has no
-  separate system-message field), diffs each `streamWorkBuddy()` snapshot
-  against the previous one to turn it back into `delta` chunks (so the
-  existing append-only NDJSON protocol and frontend didn't need to change
-  shape), and emits `done`/`error` as before.
+**WorkBuddy AI gateway** — WorkBuddy AI (desktop app, `WorkBuddyAI.exe`)
+bundles a CLI ("CodeBuddy Code", npm package `@tencent-ai/codebuddy-code`,
+command `codebuddy`) that runs as a local HTTP gateway:
+`codebuddy --serve --port 8321` (after a one-time `codebuddy /login`),
+printing an endpoint + bearer password shared with the desktop app's own
+account/session (`~/.codebuddy/settings.json` — same credits balance as
+the GUI app). Docs: https://www.workbuddy.ai/docs/cli/http-api, but several
+things below were only discoverable by instrumenting a live gateway
+(`--debug`, then reading `~/.codebuddy/logs/<date>/<project>.log` — the
+docs don't cover any of this):
 
-**Reference files** — uploaded once, Supabase-backed, reusable across
-sessions instead of re-uploading every time. Browsable directly inside the
-LiveBuddy panel (`ReferenceFilesField` in `live-assistant.tsx`, under the
-"Product notes" textarea) — not a separate page section.
-- `supabase/migrations/20261010_tiktok_reference_files.sql` — table
-  `tiktok_reference_files` (RLS: owner-only) + a **private** Storage bucket
-  `tiktok-reference-files`. No Supabase CLI is wired up in this repo (no
-  `supabase/config.toml`, no project link) — run this migration by pasting
-  it into the Supabase project's SQL editor.
-- `lib/tiktok/reference-files.ts` — shared bucket/table name constants,
-  `ReferenceFile` type (client-safe — no server-only imports), 20MB upload
-  cap, content-type → WorkBuddy attachment `type` mapping
-  (`image`/`video`/`file`).
-- `lib/tiktok/resolve-attachments.ts` — `server-only`; turns a user's
-  selected file ids into signed-URL `WorkBuddyAttachment[]`, used by
-  `app/api/assistant`. Ignores ids that don't belong to the caller instead
-  of erroring (a stale selection shouldn't block answering).
-- `app/api/tiktok/files/route.ts` (`GET` list, `POST` upload) and
-  `app/api/tiktok/files/[id]/route.ts` (`DELETE`) — all storage/table access
-  goes through `lib/supabase/admin.ts`'s service-role client (bucket is
-  private; RLS policy is a backstop, not the actual access path), scoped to
-  `auth.getUser()`'s id taken from the normal cookie session.
+- `POST /api/v1/runs` (`{id, type: "message", payload: {text, attachments?}}`)
+  is the only endpoint this app uses. **`POST /api/v1/jobs` must never be
+  used with chat input** — it spawns an autonomous coding-agent OS process
+  against a real `cwd`, confirmed by testing.
+- **The `id` field doubles as the conversation/session id.** Reusing the
+  same `id` across multiple `/api/v1/runs` calls keeps them in the same
+  WorkBuddy session — same `agent.sessionId` comes back, and a fact stated
+  in one call is correctly recalled in a later call with no re-statement
+  needed (verified empirically: a value given in turn 1 was repeated back
+  correctly, verbatim, in turn 2). A random/fresh `id` gets a fresh,
+  isolated session. This is the whole mechanism the priming design below
+  depends on.
+- A run's reply only exists on `GET /api/v1/runs/:runId/stream` (SSE)
+  while in-flight — it 404s (`RUN_NOT_FOUND`) once settled, and
+  `GET /api/v1/runs/:runId` (poll) never exposes the content, only
+  `{runId, active}`. Open the stream immediately after the `POST`.
+  Event shape: `event: message` →
+  `data: {version, replyTo, status, content: {markdown}, agent: {sessionId, toolCalls}}`,
+  then `event: done`. Each `message` event carries the *full* answer so
+  far, not a delta — `lib/workbuddy/client.ts`'s `streamWorkBuddy()` diffs
+  successive snapshots itself so callers still get incremental chunks.
+- **`payload.attachments` is unreliable and was the root cause of two
+  separate severe-latency bugs, now both avoided entirely** (see Changelog
+  for the full diagnosis):
+  - `urlType: "url"` → the model calls its own `WebFetch` tool on the URL
+    instead of reading it inline: ~20-30s added, every single question.
+  - `urlType: "local-path"` → fast for a plain `.txt` file, but for a PDF
+    the model instead calls `Read` then (confirmed via the debug log)
+    **up to three separate `Bash` tool calls**, 30-50+ seconds total, and
+    sometimes `finish_flag: "interrupt"` (outright failure) on an older,
+    broken Electron-bundled copy of the CLI (the properly-installed
+    `@tencent-ai/codebuddy-code` npm package doesn't have that specific
+    hang, but still burns the same Bash-tool-call time for PDFs).
+    **A coding agent with Bash access, auto-invoking shell commands against
+    this project's own `cwd` in response to untrusted TikTok chat input, is
+    a real risk — not just slow.** This is why attachments aren't used for
+    reference-file content at all any more; see the priming design below.
+- `lib/workbuddy/client.ts` — `streamWorkBuddy({text, attachments?, id?})`:
+  POSTs the run (reusing `id` if given, else a fresh `randomUUID()`),
+  opens the stream immediately, yields each full-answer snapshot.
+  `askWorkBuddy()` wraps it for callers that just want the final answer.
+  `lib/workbuddy/config.ts` reads `WORKBUDDY_API_URL`/`WORKBUDDY_API_TOKEN`;
+  unset → typed `WorkBuddyNotConfiguredError`.
 
-**One-time setup (nobody has done this yet):**
-1. Run the migration SQL above in the Supabase project's SQL editor, and
-   set `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` (Project Settings → API
-   → `service_role` key — **never** expose this to the client).
+**Reference-file priming (replaces attachments/RAG entirely — no embeddings,
+no chunking, no vector search)**: the host checks files in the reference
+panel, clicks **"Set as context,"** and the *exact, full* text of those
+files is sent once as a priming message into the page's `sessionId`. Every
+question asked afterward in that same session reuses `sessionId`, so the
+content is already there — no attachment, no tool call, just a normal fast
+conversational turn (~2-5s, confirmed by testing, vs. 30-67s per question
+with the old attachment approaches).
+- `lib/tiktok/extract-text.ts` — `server-only`; plain text out of an
+  uploaded file's bytes: `.txt`/`.md` as-is, `.docx` via `mammoth`, `.pdf`
+  via `pdf-parse` v2's `PDFParse` class (`new PDFParse({data: buffer})` →
+  `.getText()` — v2 is a ground-up rewrite, **not** the v1 default-export
+  function API). `pdf-parse` must be in `next.config.ts`'s
+  `serverExternalPackages` — Turbopack otherwise fails to resolve
+  `pdfjs-dist`'s worker file (`Cannot find module '.../pdf.worker.mjs'`).
+- `app/api/tiktok/prime/route.ts` — `POST {sessionId, fileIds}`: downloads
+  each selected file from Storage, extracts its text, wraps each in
+  `<file name="...">...</file>`, concatenates (capped at 60,000 chars —
+  returns a 400 telling the host to select fewer files if exceeded), and
+  sends one priming message via `askWorkBuddy({text, id: sessionId})`
+  asking the model to just acknowledge, not answer yet.
+- `app/api/assistant/route.ts` — `POST {sessionId, products, comment}`.
+  No `fileIds`, no attachments — just folds the system prompt + product
+  notes + viewer comment into one `text` and calls
+  `streamWorkBuddy({text, id: sessionId})`. This is what makes real
+  questions fast: all the expensive context-loading happened once, earlier,
+  in the priming call.
+- `components/tiktok-reference-files.tsx` — upload/browse/delete (unchanged
+  from before) plus the "Set as context" button: disabled with no files
+  checked, shows "Setting context…" while priming, "✓ N files set for this
+  session" once done, and "Selection changed — set again to update" if the
+  checked set no longer matches what was last primed.
+- `supabase/migrations/20261010_tiktok_reference_files.sql` +
+  `20261011_tiktok_reference_files_public.sql` — table
+  `tiktok_reference_files` (now public — second migration drops the
+  `user_id` FK/NOT NULL and opens RLS) + private Storage bucket
+  `tiktok-reference-files`. No Supabase CLI wired up in this repo — run
+  migrations via the SQL editor, in filename order. **No `tiktok_reference_chunks`
+  table and no `vector` extension are used** — an embedding/RAG version of
+  this was built and fully torn out again at the user's explicit request
+  ("dont use embedding... use the exact files as context"); nothing from it
+  remains in the schema or codebase.
+- `lib/tiktok/reference-files.ts` — bucket/table constants, `ReferenceFile`
+  type (client-safe), `referenceFileKind()`/`REFERENCE_FILE_ACCEPT`
+  (`.txt`/`.md`/`.pdf`/`.docx` only — exactly what `extract-text.ts` can
+  handle), 20MB upload cap.
+- `app/api/tiktok/files/route.ts` (`GET` list, `POST` upload — just storage
+  + a table row, no indexing of any kind) and `.../[id]/route.ts`
+  (`DELETE`). All via `lib/supabase/admin.ts`'s service-role client.
+
+**Dead ends found and removed, so they don't get rebuilt:**
+- `lib/tiktok/resolve-attachments.ts` (signed-URL `url`-type attachments —
+  the WebFetch-detour bug) and a local-folder `workspaceDirs`/
+  `lib/workbuddy/product-docs.ts` mechanism (scans a hardcoded
+  `workbuddy-product-docs/` folder and registers it via
+  `POST /api/v1/workspace-dirs`) were both tried and both deleted. The
+  workspace-dirs approach in particular doesn't fit the actual UX (picking
+  *specific* uploaded files via the browser, not dropping files into a
+  server-local folder) and still routes through the same slow/risky
+  local-path-attachment path for PDFs. `lib/workbuddy/client.ts` no longer
+  has any `workspace-dirs` code. The `workbuddy-product-docs/` folder
+  itself (containing a user-dropped test PDF) was left alone on disk —
+  unreferenced by any code now, but not this session's file to delete.
+- The embedding/RAG version (`lib/tiktok/chunk-text.ts`, `embeddings.ts`
+  (`fastembed`, local ONNX model, no API key), `index-file.ts`,
+  `retrieve-context.ts`, a `match_reference_chunks` Postgres function) was
+  fully built, tested, and working (3.5-5s answers, correctly grounded) —
+  then removed completely per explicit instruction to use exact files, not
+  embeddings. `fastembed`/`onnxruntime-node` are out of
+  `serverExternalPackages` again; only `pdf-parse` remains (still needed
+  for `extract-text.ts`). `mammoth`/`pdf-parse` stay in `package.json`.
+
+**One-time setup:**
+1. Run both `supabase/migrations/2026101*` SQL files (filename order) in
+   the Supabase SQL editor, and set `SUPABASE_SERVICE_ROLE_KEY` in
+   `.env.local`.
 2. On the machine that should answer questions: `codebuddy /login` once
-   (interactive), then keep `codebuddy --serve --port 8321` running. Set
+   (the bundled Electron-app copy of the CLI can't do this — its
+   interactive/TUI code is missing from that build; install and use the
+   real `@tencent-ai/codebuddy-code` npm package instead), then keep
+   `codebuddy --serve --port 8321` (or any port) running. Set
    `WORKBUDDY_API_URL`/`WORKBUDDY_API_TOKEN` in `.env.local` from its
-   printed output. This is a local gateway (`127.0.0.1`) tied to one
-   machine's logged-in WorkBuddy session — it is not something Vercel's
-   production deployment can reach, so answering only works when run
-   alongside a live `codebuddy --serve` process (e.g. locally, or from a
-   machine that's reachable at `WORKBUDDY_API_URL`).
+   printed output. Local-only (`127.0.0.1`) — not reachable from a Vercel
+   deployment, so this only works run alongside a live `codebuddy --serve`
+   process (locally, or from a machine reachable at `WORKBUDDY_API_URL`).
 
 **Deferred / explicitly not done:**
-- `ANTHROPIC_API_KEY`/`@anthropic-ai/sdk` are no longer used by this route
-  (left in `package.json` from the pre-WorkBuddy version; harmless if
-  unused, but worth removing in a cleanup pass if nothing else needs them).
-- No retry/backoff if the WorkBuddy gateway is mid-restart.
+- No auth anywhere in this feature, by design. Anyone who can reach
+  `/dashboard` can upload/delete shared reference files and spend the
+  WorkBuddy account's credits (same pool as the desktop app).
+- `ANTHROPIC_API_KEY`/`@anthropic-ai/sdk` in `package.json` are leftover
+  from a pre-WorkBuddy version of this route; unused, harmless, worth a
+  cleanup pass.
+- No retry/backoff if the WorkBuddy gateway is mid-restart (the priming
+  call does get `askWorkBuddy`'s normal error handling, just no retry).
+  `lib/tiktok/retrieve-context.ts` (deleted, was RAG-only) used to retry
+  its Supabase RPC call once after observing a cold-connection failure —
+  nothing in the current design makes an RPC call at question time, so
+  that specific failure mode no longer applies.
 - No way to edit an uploaded file's name/description after upload.
+- No cap on how many files can be checked at once before "Set as context"
+  — only a total-character cap (60k) enforced after extraction, which
+  surfaces as a plain error rather than, say, graying out further
+  checkboxes.
 - The `/dashboard/*` auth-middleware gap noted in the Emails section above
-  also applies here — these API routes check `auth.getUser()` themselves,
-  but the *page* isn't gated by middleware.
+  is moot for this feature specifically (nothing here ever checked auth)
+  but the gap itself is still real for anything else that might rely on
+  middleware-level gating.
 
 ## Changelog
 
+- 2026-10-10 — Replaced reference-file context entirely with session
+  priming, at explicit user request ("use the exact files as context...
+  dont use embedding... make sure the file is being set as context at the
+  initial start of the new session, so the question... replies instantly").
+  Found this repo already had two half-built, uncommitted attempts at
+  related ideas sitting on disk when this started: a restored (buggy)
+  `url`-type attachment resolver, and a new `workspaceDirs`/
+  `product-docs.ts` local-folder mechanism — neither matched the actual
+  request, both deleted. Before building anything, verified the core
+  mechanism empirically against a live gateway (reusing the Gateway
+  Protocol `id` as a session id — confirmed via a same-id/different-id A/B
+  test that a fact stated in one call is correctly recalled, verbatim, in
+  a later call with the same id and not with a different one) and found,
+  also empirically, that attaching a PDF via `local-path` makes the model
+  burn 30-50+ seconds across up to three `Bash` tool calls per question —
+  a real security concern (untrusted chat input reaching a Bash-capable
+  coding agent against this project's own `cwd`), not just a latency one.
+  That finding is what shaped the actual fix: extract file text ourselves
+  (`lib/tiktok/extract-text.ts`) and prime the session with it directly as
+  plain text (`app/api/tiktok/prime/route.ts`), never handing WorkBuddy a
+  file reference at all. `useLiveAssistant()` now owns one `sessionId` per
+  page load, reused as `id` on every `/api/assistant` call, which is the
+  only reason priming-once-then-fast-questions works. Verified end-to-end:
+  upload → prime (~6.5s) → two follow-up questions (2.1s, 4.4s), correctly
+  grounded in the actual PDF content, zero tool calls.
 - 2026-10-10 — A teammate merged in a full rebuild of the TikTok Live page
   as "LiveBuddy": chat bubbles (`components/ui/bubble.tsx`, `message.tsx`,
   `marker.tsx`), `components/live-assistant.tsx`

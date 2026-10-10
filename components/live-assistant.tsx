@@ -24,6 +24,13 @@ export type Exchange = {
 const PRODUCTS_KEY = "livebuddy:products"
 
 export function useLiveAssistant() {
+  // Reused as the Gateway Protocol message `id` on every call, which is
+  // what keeps a conversation (including anything primed via
+  // /api/tiktok/prime) in the same WorkBuddy session. See context.md.
+  // Starts fresh on page load, and again every time primeContext() is
+  // called — re-priming starts a clean session rather than mixing the new
+  // file selection into whatever was said/primed before.
+  const [sessionId, setSessionId] = React.useState(() => crypto.randomUUID())
   const [exchanges, setExchanges] = React.useState<Exchange[]>([])
   const [products, setProductsState] = React.useState("")
   const [selectedFileIds, setSelectedFileIds] = React.useState<string[]>([])
@@ -47,16 +54,16 @@ export function useLiveAssistant() {
   }, [])
 
   const answerOne = React.useCallback(
-    async (exchangeId: string, question: ChatMessage, productNotes: string, fileIds: string[]) => {
+    async (exchangeId: string, question: ChatMessage, productNotes: string) => {
       const fail = (error: string) => update(exchangeId, () => ({ status: "error", error }))
       try {
         const res = await fetch("/api/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            sessionId,
             products: productNotes,
             comment: { nickname: question.nickname || question.uniqueId, text: question.comment },
-            fileIds,
           }),
         })
         if (!res.ok || !res.body) {
@@ -88,7 +95,7 @@ export function useLiveAssistant() {
         fail("Network error while asking LiveBuddy.")
       }
     },
-    [update]
+    [update, sessionId]
   )
 
   const ask = React.useCallback(
@@ -100,14 +107,42 @@ export function useLiveAssistant() {
         status: "pending",
       }))
       setExchanges((prev) => [...prev, ...created])
-      for (const e of created) void answerOne(e.id, e.question, products, selectedFileIds)
+      for (const e of created) void answerOne(e.id, e.question, products)
     },
-    [answerOne, products, selectedFileIds]
+    [answerOne, products]
   )
 
   const clear = React.useCallback(() => setExchanges([]), [])
 
-  return { exchanges, products, setProducts, selectedFileIds, setSelectedFileIds, ask, clear }
+  // Starts a brand new session primed with exactly these files — not an
+  // addition to whatever the old session already had in it. Clears the
+  // transcript too, since those answers belonged to the old session's
+  // context and would be misleading to leave sitting above a fresh one.
+  const primeContext = React.useCallback(async (fileIds: string[]) => {
+    const newSessionId = crypto.randomUUID()
+    const res = await fetch("/api/tiktok/prime", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: newSessionId, fileIds }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error ?? "Could not set context.")
+    setSessionId(newSessionId)
+    setExchanges([])
+    return body as { fileCount: number }
+  }, [])
+
+  return {
+    sessionId,
+    exchanges,
+    products,
+    setProducts,
+    selectedFileIds,
+    setSelectedFileIds,
+    ask,
+    clear,
+    primeContext,
+  }
 }
 
 export function LiveAssistantPanel({
