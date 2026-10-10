@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { CheckmarkCircle02Icon, SentIcon } from "@hugeicons/core-free-icons"
 
@@ -139,11 +140,14 @@ export function TikTokChatMonitor() {
       <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-3 rounded-xl border border-white/70 bg-gradient-to-br from-white via-white to-[#fff3f6] px-5 py-4 shadow-[0_12px_35px_-22px_rgba(254,44,85,0.4)] transition-shadow duration-200 hover:shadow-[0_16px_40px_-20px_rgba(37,244,238,0.38)] sm:px-6 sm:py-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#161823] text-white shadow-[3px_3px_0_#25f4ee,-3px_-3px_0_#fe2c55]">
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-6">
-                <path d="M14 3v11.2a4.2 4.2 0 1 1-3.3-4.1V7.2c-1.2-.2-2.2-.7-3.1-1.5v4.4A7.2 7.2 0 1 0 17 17.2V9.4c1.2.8 2.6 1.2 4 1.2V7.2c-3.9 0-7-1.8-7-4.2Z" fill="currentColor" />
-              </svg>
-            </span>
+            <Image
+              src="/tiktok-circle-icon-free-png.png"
+              alt=""
+              width={100}
+              height={100}
+              preload
+              className="size-16 shrink-0"
+            />
             <div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h1 className="text-3xl font-black leading-none tracking-[-0.055em] text-[#161823] sm:text-4xl">
