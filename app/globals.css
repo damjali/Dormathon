@@ -117,6 +117,26 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+.dashboard-theme {
+  --background: #08090c;
+  --foreground: #f5f5f7;
+  --card: #ffffff;
+  --card-foreground: #161823;
+  --popover: #ffffff;
+  --popover-foreground: #161823;
+  --primary: #fe2c55;
+  --primary-foreground: #fff;
+  --secondary: #f1f1f3;
+  --secondary-foreground: #252632;
+  --muted: #f1f1f3;
+  --muted-foreground: #686a75;
+  --accent: #eafafa;
+  --accent-foreground: #161823;
+  --border: #e5e5e8;
+  --input: #e5e5e8;
+  --ring: #fe2c55;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

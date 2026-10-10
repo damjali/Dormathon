@@ -7,7 +7,7 @@ import { AiChat02Icon } from "@hugeicons/core-free-icons"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Marker, MarkerContent } from "@/components/ui/marker"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@/components/ui/message"
 import type { AssistantEvent } from "@/lib/assistant/types"
@@ -176,16 +176,28 @@ export function LiveAssistantPanel({
 
   return (
     <Card className={className}>
-      <CardHeader>
-        <CardTitle>LiveBuddy AI</CardTitle>
-        <CardDescription>Answers to the comments you sent, ready to read out on stream.</CardDescription>
-        {exchanges.length > 0 && (
-          <CardAction>
-            <Button variant="ghost" size="sm" onClick={onClear}>
-              Clear
-            </Button>
-          </CardAction>
-        )}
+      <CardHeader className="flex h-[124px] min-h-[124px] shrink-0 flex-col justify-center gap-2 border-b border-[#25c9c4]/20 bg-[#effcfb] px-5 py-4">
+        <div className="flex items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#161823] text-white shadow-[2px_2px_0_#25f4ee,-2px_-2px_0_#fe2c55]">
+            <HugeiconsIcon icon={AiChat02Icon} strokeWidth={2} className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <CardTitle className="shrink-0 text-base font-semibold">LiveBuddy AI</CardTitle>
+              <span className="rounded-full border border-[#25c9c4]/30 bg-white px-2.5 py-1 text-[10px] font-medium text-[#146d6a]">
+                Reply assistant
+              </span>
+              {exchanges.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={onClear} className="ml-auto h-8 shrink-0 px-2">
+                  Clear
+                </Button>
+              )}
+            </div>
+            <CardDescription className="mt-1 line-clamp-2 min-h-8 text-xs leading-4">
+              Answers to the comments you sent, ready to read out on stream.
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
         <div
@@ -197,9 +209,17 @@ export function LiveAssistantPanel({
           className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1"
         >
           {exchanges.length === 0 ? (
-            <Marker className="m-auto w-fit">
-              <MarkerContent>Send a comment from the live chat and LiveBuddy will answer it here.</MarkerContent>
-            </Marker>
+            <div className="m-auto flex max-w-xs flex-col items-center gap-3 px-5 py-8 text-center">
+              <span className="flex size-12 items-center justify-center rounded-2xl bg-[#25f4ee]/15 text-[#146d6a] ring-1 ring-[#25c9c4]/20">
+                <HugeiconsIcon icon={AiChat02Icon} strokeWidth={1.8} className="size-5" />
+              </span>
+              <div>
+                <p className="text-sm font-medium">Replies will show up here</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Select a viewer comment to get a response from LiveBuddy.
+                </p>
+              </div>
+            </div>
           ) : (
             exchanges.map((e) => <ExchangeItem key={e.id} exchange={e} />)
           )}
@@ -238,7 +258,7 @@ function ExchangeItem({ exchange }: { exchange: Exchange }) {
       <Message align="end">
         <MessageAvatar>
           <Avatar>
-            <AvatarFallback className="bg-primary text-primary-foreground">
+            <AvatarFallback className="bg-[#000000] text-white">
               <HugeiconsIcon icon={AiChat02Icon} strokeWidth={2} className="size-4" />
             </AvatarFallback>
           </Avatar>
@@ -254,7 +274,7 @@ function ExchangeItem({ exchange }: { exchange: Exchange }) {
             <>
               {answer && (
                 <Bubble>
-                  <BubbleContent>{answer}</BubbleContent>
+                  <BubbleContent className="!bg-[#000000] !text-white">{answer}</BubbleContent>
                 </Bubble>
               )}
               {status === "error" && (
