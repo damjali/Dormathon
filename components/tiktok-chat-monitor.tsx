@@ -26,13 +26,7 @@ type Phase =
 
 const MAX_MESSAGES = 500
 
-type AnswerState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "done"; answer: string }
-  | { kind: "error"; message: string }
-
-export function TikTokChatMonitor({ selectedFileIds = [] }: { selectedFileIds?: string[] }) {
+export function TikTokChatMonitor() {
   const [input, setInput] = React.useState("")
   const [phase, setPhase] = React.useState<Phase>({ kind: "idle" })
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
@@ -213,6 +207,8 @@ export function TikTokChatMonitor({ selectedFileIds = [] }: { selectedFileIds?: 
           exchanges={assistant.exchanges}
           products={assistant.products}
           onProductsChange={assistant.setProducts}
+          selectedFileIds={assistant.selectedFileIds}
+          onSelectedFileIdsChange={assistant.setSelectedFileIds}
           onClear={assistant.clear}
         />
       </div>

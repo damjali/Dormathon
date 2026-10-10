@@ -9,16 +9,17 @@ export class WorkBuddyNotConfiguredError extends Error {
   }
 }
 
-// Submits a question to the local WorkBuddy AI (CodeBuddy) gateway and waits
-// for its reply over the run's SSE stream.
+// Submits a question to the local WorkBuddy AI (CodeBuddy) gateway and
+// yields the reply's markdown *as it stands so far* each time the run's SSE
+// stream reports an update (at minimum once, with the final answer).
 //
 // Must open the stream immediately after the POST — the gateway drops a
 // run's transcript (GET .../stream then 404s with RUN_NOT_FOUND) once the
 // run finishes, so there's no reliable polling fallback.
-export async function askWorkBuddy(
+export async function* streamWorkBuddy(
   { text, attachments }: AskWorkBuddyParams,
   { timeoutMs = 90_000 }: { timeoutMs?: number } = {}
-): Promise<AskWorkBuddyResult> {
+): AsyncGenerator<string> {
   const config = getWorkBuddyConfig()
   if (!config) throw new WorkBuddyNotConfiguredError()
   const { baseUrl, token } = config
@@ -28,12 +29,11 @@ export async function askWorkBuddy(
     "X-CodeBuddy-Request": "1",
   }
 
-  const messageId = randomUUID()
   const postRes = await fetch(`${baseUrl}/api/v1/runs`, {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/json" },
     body: JSON.stringify({
-      id: messageId,
+      id: randomUUID(),
       type: "message",
       payload: { text, attachments },
     }),
@@ -61,11 +61,14 @@ export async function askWorkBuddy(
       throw new Error(`WorkBuddy stream failed (${streamRes.status}): ${await streamRes.text()}`)
     }
 
-    let answer: string | null = null
+    let sawAnswer = false
     for await (const { event, data } of readSSE(streamRes.body)) {
       if (event === "message") {
         const parsed = JSON.parse(data) as WorkBuddyRunMessageEvent
-        if (parsed.content?.markdown) answer = parsed.content.markdown
+        if (parsed.content?.markdown) {
+          sawAnswer = true
+          yield parsed.content.markdown
+        }
       } else if (event === "error") {
         throw new Error(`WorkBuddy run errored: ${data}`)
       } else if (event === "done") {
@@ -73,11 +76,21 @@ export async function askWorkBuddy(
       }
     }
 
-    if (answer === null) throw new Error("WorkBuddy's stream ended without a reply.")
-    return { answer }
+    if (!sawAnswer) throw new Error("WorkBuddy's stream ended without a reply.")
   } finally {
     clearTimeout(timeout)
   }
+}
+
+// Convenience wrapper over streamWorkBuddy() for callers that just want the
+// final answer, not incremental updates.
+export async function askWorkBuddy(
+  params: AskWorkBuddyParams,
+  opts?: { timeoutMs?: number }
+): Promise<AskWorkBuddyResult> {
+  let answer = ""
+  for await (const snapshot of streamWorkBuddy(params, opts)) answer = snapshot
+  return { answer }
 }
 
 // Minimal SSE frame reader: splits "event: x\ndata: y\n\n" blocks off a

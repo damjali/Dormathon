@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto"
-import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   MAX_REFERENCE_FILE_BYTES,
@@ -10,19 +9,12 @@ import {
 
 export const dynamic = "force-dynamic"
 
-// GET /api/tiktok/files -> this user's uploaded reference files.
+// GET /api/tiktok/files -> reference files shared by everyone using this tool.
 export async function GET() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: "Not signed in" }, { status: 401 })
-
   const admin = createAdminClient()
   const { data, error } = await admin
     .from(REFERENCE_FILES_TABLE)
     .select("id, file_name, content_type, size_bytes, created_at")
-    .eq("user_id", user.id)
     .order("created_at", { ascending: false })
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
@@ -41,12 +33,6 @@ export async function GET() {
 // the private bucket and records it so it can be re-selected without
 // re-uploading next time.
 export async function POST(request: Request) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: "Not signed in" }, { status: 401 })
-
   const form = await request.formData()
   const file = form.get("file")
   if (!(file instanceof File)) {
@@ -63,7 +49,7 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient()
-  const storagePath = `${user.id}/${randomUUID()}-${file.name}`
+  const storagePath = `${randomUUID()}-${file.name}`
 
   const { error: uploadError } = await admin.storage
     .from(REFERENCE_FILES_BUCKET)
@@ -73,7 +59,6 @@ export async function POST(request: Request) {
   const { data: row, error: insertError } = await admin
     .from(REFERENCE_FILES_TABLE)
     .insert({
-      user_id: user.id,
       file_name: file.name,
       storage_path: storagePath,
       content_type: file.type || null,
