@@ -23,6 +23,18 @@ export type Exchange = {
 
 const PRODUCTS_KEY = "livebuddy:products"
 
+// crypto.randomUUID() only exists on https and localhost; on a plain-http
+// host it's undefined and would crash the page. getRandomValues() works
+// everywhere, so build the v4 UUID from that when needed.
+function newSessionId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID()
+  const b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const hex = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 export function useLiveAssistant() {
   // Reused as the Gateway Protocol message `id` on every call, which is
   // what keeps a conversation (including anything primed via
@@ -30,7 +42,7 @@ export function useLiveAssistant() {
   // Starts fresh on page load, and again every time primeContext() is
   // called — re-priming starts a clean session rather than mixing the new
   // file selection into whatever was said/primed before.
-  const [sessionId, setSessionId] = React.useState(() => crypto.randomUUID())
+  const [sessionId, setSessionId] = React.useState(newSessionId)
   const [exchanges, setExchanges] = React.useState<Exchange[]>([])
   const [products, setProductsState] = React.useState("")
   const [selectedFileIds, setSelectedFileIds] = React.useState<string[]>([])
@@ -119,15 +131,15 @@ export function useLiveAssistant() {
   // transcript too, since those answers belonged to the old session's
   // context and would be misleading to leave sitting above a fresh one.
   const primeContext = React.useCallback(async (fileIds: string[]) => {
-    const newSessionId = crypto.randomUUID()
+    const nextSessionId = newSessionId()
     const res = await fetch("/api/tiktok/prime", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: newSessionId, fileIds }),
+      body: JSON.stringify({ sessionId: nextSessionId, fileIds }),
     })
     const body = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(body.error ?? "Could not set context.")
-    setSessionId(newSessionId)
+    setSessionId(nextSessionId)
     setExchanges([])
     return body as { fileCount: number }
   }, [])
