@@ -28,7 +28,7 @@ const workspace = {
     },
     {
       title: "TikTok Live",
-      url: "/dashboard/tiktok",
+      url: "/dashboard",
       icon: Video01Icon,
     },
   ],

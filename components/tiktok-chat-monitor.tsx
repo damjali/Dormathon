@@ -1,11 +1,18 @@
 "use client"
 
 import * as React from "react"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { CheckmarkCircle02Icon, SentIcon } from "@hugeicons/core-free-icons"
 
+import { LiveAssistantPanel, useLiveAssistant } from "@/components/live-assistant"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Bubble, BubbleContent, BubbleGroup } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Marker, MarkerContent } from "@/components/ui/marker"
+import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/components/ui/message"
 import type { ChatMessage, StreamEvent } from "@/lib/tiktok/types"
 
 type Phase =
@@ -27,6 +34,10 @@ export function TikTokChatMonitor() {
   const sourceRef = React.useRef<EventSource | null>(null)
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const stickToBottom = React.useRef(true)
+  const assistant = useLiveAssistant()
+  const asked = React.useMemo(() => new Set(assistant.exchanges.map((e) => e.question.id)), [assistant.exchanges])
+  const { ask } = assistant
+  const pushToBot = React.useCallback((m: ChatMessage) => ask([m]), [ask])
 
   const stopStream = React.useCallback(() => {
     sourceRef.current?.close()
@@ -146,51 +157,126 @@ export function TikTokChatMonitor() {
 
       <StatusLine phase={phase} viewers={viewers} />
 
-      <Card className="flex min-h-[420px] flex-1 flex-col">
-        <CardHeader>
-          <CardTitle>Live chat</CardTitle>
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col">
-          <div
-            ref={scrollRef}
-            onScroll={(e) => {
-              const el = e.currentTarget
-              stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
-            }}
-            className="flex max-h-[60vh] min-h-[320px] flex-1 flex-col gap-2 overflow-y-auto"
-          >
-            {messages.length === 0 ? (
-              <p className="m-auto text-sm text-muted-foreground">
-                {phase.kind === "live"
-                  ? "Connected. Waiting for chat messages…"
-                  : "Search a username to see its live chat here."}
-              </p>
-            ) : (
-              messages.map((m) => (
-                <div key={m.id} className="flex items-start gap-2 text-sm">
-                  {m.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={m.avatarUrl}
-                      alt=""
-                      className="size-6 shrink-0 rounded-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="size-6 shrink-0 rounded-full bg-muted" />
-                  )}
-                  <div className="min-w-0">
-                    <span className="font-medium">{m.nickname}</span>
-                    {m.uniqueId && <span className="ml-1 text-xs text-muted-foreground">@{m.uniqueId}</span>}
-                    <p className="break-words">{m.comment}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="flex h-[70svh] min-h-[480px] flex-col">
+          <CardHeader>
+            <CardTitle>Live chat</CardTitle>
+            <CardDescription>Press the send button next to a comment to have LiveBuddy answer it.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col">
+            <div
+              ref={scrollRef}
+              onScroll={(e) => {
+                const el = e.currentTarget
+                stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+              }}
+              className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1"
+            >
+              {phase.kind === "live" && (
+                <Marker variant="separator" role="status">
+                  <MarkerContent>
+                    Connected to <span className="font-medium text-foreground">@{phase.username}</span>
+                  </MarkerContent>
+                </Marker>
+              )}
+              {messages.length === 0 ? (
+                phase.kind === "live" ? (
+                  <Marker role="status" className="m-auto w-fit">
+                    <MarkerContent className="animate-pulse">Waiting for chat messages…</MarkerContent>
+                  </Marker>
+                ) : (
+                  <Marker className="m-auto w-fit">
+                    <MarkerContent>Search a username to see its live chat here.</MarkerContent>
+                  </Marker>
+                )
+              ) : (
+                groupByAuthor(messages).map((group) => (
+                  <ChatGroup key={group[0].id} group={group} asked={asked} onPush={pushToBot} />
+                ))
+              )}
+              {(phase.kind === "ended" || phase.kind === "offline") && messages.length > 0 && (
+                <Marker variant="separator" role="status">
+                  <MarkerContent>Stream ended</MarkerContent>
+                </Marker>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <LiveAssistantPanel
+          exchanges={assistant.exchanges}
+          products={assistant.products}
+          onProductsChange={assistant.setProducts}
+          onClear={assistant.clear}
+        />
+      </div>
     </div>
+  )
+}
+
+// Collapse consecutive messages from the same viewer into one avatar + bubble stack.
+function groupByAuthor(messages: ChatMessage[]): ChatMessage[][] {
+  const groups: ChatMessage[][] = []
+  for (const m of messages) {
+    const last = groups[groups.length - 1]
+    if (last && last[0].userId === m.userId) last.push(m)
+    else groups.push([m])
+  }
+  return groups
+}
+
+function ChatGroup({
+  group,
+  asked,
+  onPush,
+}: {
+  group: ChatMessage[]
+  asked: Set<string>
+  onPush: (m: ChatMessage) => void
+}) {
+  const author = group[0]
+  const initials = (author.nickname || author.uniqueId || "?").slice(0, 2).toUpperCase()
+
+  return (
+    <Message>
+      <MessageAvatar>
+        <Avatar>
+          {author.avatarUrl && (
+            <AvatarImage src={author.avatarUrl} alt={`@${author.uniqueId}`} referrerPolicy="no-referrer" />
+          )}
+          <AvatarFallback>{initials}</AvatarFallback>
+        </Avatar>
+      </MessageAvatar>
+      <MessageContent className="gap-1">
+        <MessageHeader className="gap-1">
+          <span className="text-foreground">{author.nickname}</span>
+          {author.uniqueId && <span className="font-normal">@{author.uniqueId}</span>}
+        </MessageHeader>
+        <BubbleGroup>
+          {group.map((m) => {
+            const isAsked = asked.has(m.id)
+            return (
+              <div key={m.id} className="flex w-full min-w-0 items-center gap-1">
+                <Bubble variant={isAsked ? "tinted" : "muted"} className="max-w-[calc(100%-2.5rem)]">
+                  <BubbleContent>{m.comment}</BubbleContent>
+                </Bubble>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={isAsked}
+                  onClick={() => onPush(m)}
+                  aria-label={isAsked ? "Sent to LiveBuddy" : "Send to LiveBuddy"}
+                  title={isAsked ? "Sent to LiveBuddy" : "Send to LiveBuddy"}
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  <HugeiconsIcon icon={isAsked ? CheckmarkCircle02Icon : SentIcon} strokeWidth={2} />
+                </Button>
+              </div>
+            )
+          })}
+        </BubbleGroup>
+      </MessageContent>
+    </Message>
   )
 }
 
